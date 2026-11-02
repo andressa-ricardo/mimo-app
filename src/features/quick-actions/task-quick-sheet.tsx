@@ -26,9 +26,9 @@ import {
 } from '@/features/quick-actions/use-form-options';
 import { createTask, type ReminderOutcome } from '@/features/tasks/create-task';
 import { getNotificationPreferences } from '@/database/repositories/preferences-repository';
-import { ensureReminderPermission } from '@/services/notifications/task-reminders';
+import { ensureReminderPermission, getExactAlarmStatus } from '@/services/notifications/task-reminders';
 import type { Priority } from '@/types/tasks';
-import { combineDateAndTime, toDateKey, type TimeKey } from '@/utils/date';
+import { combineDateAndTime, formatDateKey, toDateKey, type DateKey, type TimeKey } from '@/utils/date';
 
 const successMessages: Record<ReminderOutcome, string> = {
   none: 'Tarefa salva.',
@@ -53,6 +53,16 @@ function useTaskRemindersSetting(): boolean {
     };
   }, []);
   return allowed;
+}
+
+/** Says exactly when the reminder fires, so a wrong AM/PM pick is obvious. */
+async function describeScheduledReminder(dueDate: DateKey, dueTime: TimeKey, today: DateKey): Promise<string> {
+  const day = dueDate === today ? 'hoje' : `em ${formatDateKey(dueDate)}`;
+  const delayNote =
+    (await getExactAlarmStatus()) === 'inexact'
+      ? ' O Android pode entregá-lo alguns minutos depois — veja Configurações.'
+      : '';
+  return `Tarefa salva. Lembrete ${day} às ${dueTime}.${delayNote}`;
 }
 
 function TaskForm({ onSaved }: { onSaved: QuickSheetProps['onSaved'] }) {
@@ -130,7 +140,11 @@ function TaskForm({ onSaved }: { onSaved: QuickSheetProps['onSaved'] }) {
         },
         reminderActive,
       );
-      onSaved(successMessages[outcome]);
+      onSaved(
+        outcome === 'scheduled' && dueTime
+          ? await describeScheduledReminder(dueDate, dueTime, initialDate)
+          : successMessages[outcome],
+      );
     } catch (error: unknown) {
       setFormError(describeError(error, 'Não foi possível salvar a tarefa. Tente novamente.'));
       savingRef.current = false;

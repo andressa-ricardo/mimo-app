@@ -4,7 +4,9 @@ import {
   SchedulableTriggerInputTypes,
   cancelScheduledNotificationAsync,
   getAllScheduledNotificationsAsync,
+  getExactAlarmPermissionsAsync,
   getPermissionsAsync,
+  requestExactAlarmPermissionsAsync,
   requestPermissionsAsync,
   scheduleNotificationAsync,
   setNotificationChannelAsync,
@@ -117,6 +119,52 @@ export async function scheduleTaskReminder(
       channelId: channelFor(TASK_CHANNEL_ID),
     },
   });
+}
+
+export type ExactAlarmStatus = "exact" | "inexact" | "not-applicable";
+
+/**
+ * Android 12+ delivers reminders on time only with the exact-alarm
+ * permission; without it the system may deliver them minutes late.
+ */
+export async function getExactAlarmStatus(): Promise<ExactAlarmStatus> {
+  if (Platform.OS !== "android") return "not-applicable";
+  try {
+    return (await getExactAlarmPermissionsAsync()).granted ? "exact" : "inexact";
+  } catch {
+    return "not-applicable";
+  }
+}
+
+/** Opens the system "Alarms & reminders" screen; resolves when the user returns. */
+export async function requestExactAlarms(): Promise<"granted" | "denied" | "unsupported"> {
+  try {
+    return (await requestExactAlarmPermissionsAsync()).granted ? "granted" : "denied";
+  } catch (error: unknown) {
+    console.warn("Permissão de alarme exato indisponível.", error);
+    return "unsupported";
+  }
+}
+
+const TEST_DELAY_MS = 5000;
+
+/** Schedules a notification a few seconds ahead to check the whole pipeline. */
+export async function sendTestNotification(): Promise<ReminderPermission> {
+  const permission = await ensureReminderPermission();
+  if (permission !== "granted") return permission;
+  await scheduleNotificationAsync({
+    content: {
+      title: "Notificação de teste",
+      body: "Tudo certo! Os lembretes do Mimo estão funcionando.",
+      data: { kind: "test" },
+    },
+    trigger: {
+      type: SchedulableTriggerInputTypes.DATE,
+      date: Date.now() + TEST_DELAY_MS,
+      channelId: channelFor(TASK_CHANNEL_ID),
+    },
+  });
+  return "granted";
 }
 
 export async function cancelTaskReminder(

@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { StyleSheet, View } from 'react-native';
+import { Pressable, StyleSheet, View } from 'react-native';
 
 import { ToggleField, ToggleGroup } from '@/components/forms/toggle-field';
 import { AppText } from '@/components/ui/app-text';
@@ -8,7 +8,13 @@ import {
   saveNotificationPreferences,
 } from '@/database/repositories/preferences-repository';
 import { syncBillRemindersNow, syncTaskRemindersNow } from '@/services/notifications/notification-sync';
-import { ensureReminderPermission } from '@/services/notifications/task-reminders';
+import {
+  ensureReminderPermission,
+  getExactAlarmStatus,
+  requestExactAlarms,
+  sendTestNotification,
+  type ExactAlarmStatus,
+} from '@/services/notifications/task-reminders';
 import type { NotificationPreferences } from '@/types/preferences';
 
 type PreferenceKey = keyof NotificationPreferences;
@@ -23,6 +29,7 @@ export function NotificationSettings({ onFeedback }: { onFeedback: (message: str
   const [preferences, setPreferences] = useState<NotificationPreferences | null>(null);
   const [busyKey, setBusyKey] = useState<PreferenceKey | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
+  const [exactAlarms, setExactAlarms] = useState<ExactAlarmStatus>('not-applicable');
 
   useEffect(() => {
     let active = true;
@@ -31,10 +38,36 @@ export function NotificationSettings({ onFeedback }: { onFeedback: (message: str
         if (active) setPreferences(loaded);
       })
       .catch((error: unknown) => console.warn('Falha ao carregar notificações.', error));
+    void getExactAlarmStatus().then((status) => {
+      if (active) setExactAlarms(status);
+    });
     return () => {
       active = false;
     };
   }, []);
+
+  const allowExactAlarms = async () => {
+    const result = await requestExactAlarms();
+    setExactAlarms(await getExactAlarmStatus());
+    if (result === 'granted') onFeedback('Lembretes no horário exato ativados.');
+    else if (result === 'unsupported') onFeedback('Não foi possível abrir essa configuração neste aparelho.');
+  };
+
+  const sendTest = async () => {
+    try {
+      const permission = await sendTestNotification();
+      onFeedback(
+        permission === 'granted'
+          ? 'A notificação de teste chega em alguns segundos.'
+          : permission === 'denied'
+            ? 'As notificações estão bloqueadas nas configurações do sistema.'
+            : 'Notificações não estão disponíveis neste dispositivo.',
+      );
+    } catch (error: unknown) {
+      console.error('Falha ao enviar notificação de teste.', error);
+      onFeedback('Não foi possível enviar a notificação de teste.');
+    }
+  };
 
   const toggle = async (key: PreferenceKey, enabled: boolean) => {
     if (!preferences || busyKey) return;
@@ -86,12 +119,35 @@ export function NotificationSettings({ onFeedback }: { onFeedback: (message: str
           {notice}
         </AppText>
       ) : null}
+      {exactAlarms === 'inexact' ? (
+        <View style={styles.hint}>
+          <AppText color="secondary" variant="caption">
+            Sem a permissão de alarmes, o Android pode entregar os lembretes alguns minutos depois do horário.
+          </AppText>
+          <Pressable accessibilityRole="button" hitSlop={8} onPress={() => void allowExactAlarms()}>
+            <AppText color="accent" variant="label">
+              Permitir horário exato
+            </AppText>
+          </Pressable>
+        </View>
+      ) : null}
+      <Pressable accessibilityRole="button" hitSlop={8} onPress={() => void sendTest()} style={styles.testLink}>
+        <AppText color="accent" variant="label">
+          Enviar notificação de teste
+        </AppText>
+      </Pressable>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
+  hint: {
+    gap: 6,
+  },
   section: {
     gap: 8,
+  },
+  testLink: {
+    alignSelf: 'flex-start',
   },
 });

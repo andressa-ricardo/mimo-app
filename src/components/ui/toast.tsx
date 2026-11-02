@@ -5,7 +5,8 @@ import { Animated, StyleSheet } from 'react-native';
 import { AppText } from '@/components/ui/app-text';
 import { useAppTheme } from '@/theme/theme-provider';
 
-const VISIBLE_MS = 2800;
+const MIN_VISIBLE_MS = 2800;
+const MS_PER_CHARACTER = 55;
 
 export type ToastMessage = { id: number; text: string };
 
@@ -27,7 +28,7 @@ export function Toast({ message, onHide }: ToastProps) {
       Animated.timing(opacity, { toValue: 0, duration: 220, useNativeDriver: true }).start(({ finished }) => {
         if (finished) onHide();
       });
-    }, VISIBLE_MS);
+    }, Math.max(MIN_VISIBLE_MS, message.text.length * MS_PER_CHARACTER));
     return () => clearTimeout(timer);
   }, [message, onHide, opacity]);
 
