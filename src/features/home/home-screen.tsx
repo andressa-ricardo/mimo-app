@@ -17,7 +17,6 @@ import { Toast, type ToastMessage } from '@/components/ui/toast';
 import { getTask } from '@/database/repositories/tasks-repository';
 import type {
   HomeGoal,
-  HomeNote,
   HomePlan,
   HomeTask,
   HomeWishlistItem,
@@ -137,10 +136,8 @@ function SecondaryShortcuts() {
     icon: keyof typeof Ionicons.glyphMap;
     label: string;
   }[] = [
-    { label: 'Notas', icon: 'document-text-outline', href: '/notes' },
     { label: 'Metas', icon: 'disc-outline', href: '/goals' },
     { label: 'Calendário', icon: 'calendar-outline', href: '/calendar' },
-    { label: 'Ajustes', icon: 'settings-outline', href: '/settings' },
   ];
 
   return (
@@ -358,33 +355,6 @@ function GoalList({ goals }: { goals: HomeGoal[] }) {
   );
 }
 
-function NoteGrid({ notes }: { notes: HomeNote[] }) {
-  const { colors } = useAppTheme();
-  if (notes.length === 0) {
-    return <EmptyState icon="document-text-outline" message="Nenhuma nota recente ainda." />;
-  }
-
-  return (
-    <View style={styles.notesGrid}>
-      {notes.map((note) => (
-        <View
-          key={note.id}
-          style={[styles.noteCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-          <View style={styles.noteTitleRow}>
-            <AppText numberOfLines={1} style={styles.noteTitle}>
-              {note.title}
-            </AppText>
-            {note.pinned ? <Ionicons color={colors.accent} name="pin-outline" size={14} /> : null}
-          </View>
-          <AppText color="secondary" numberOfLines={3} variant="caption">
-            {note.preview}
-          </AppText>
-        </View>
-      ))}
-    </View>
-  );
-}
-
 export function HomeScreen() {
   const { colors, profile } = useAppTheme();
   const summary = useHomeSummary();
@@ -546,10 +516,6 @@ export function HomeScreen() {
           <GoalList goals={data.goals} />
         </View>
 
-        <View style={styles.section}>
-          <SectionHeader href="/notes" title="Notas recentes" />
-          <NoteGrid notes={data.notes} />
-        </View>
       </ScrollView>
 
       <Toast message={toast} onHide={hideToast} />
@@ -676,28 +642,6 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'center',
     padding: 24,
-  },
-  noteCard: {
-    borderRadius: 17,
-    borderWidth: 1,
-    flexBasis: '48%',
-    flexGrow: 1,
-    minHeight: 105,
-    padding: 14,
-  },
-  noteTitle: {
-    flex: 1,
-  },
-  noteTitleRow: {
-    alignItems: 'center',
-    flexDirection: 'row',
-    gap: 4,
-    marginBottom: 7,
-  },
-  notesGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 10,
   },
   onAccentMuted: {
     opacity: 0.82,

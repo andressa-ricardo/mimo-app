@@ -49,11 +49,16 @@ function describeInstallments(amountCents: number | null, count: number | null):
     : `1ª de ${formatCurrency(first)} e demais de ${formatCurrency(last)}, uma por mês`;
 }
 
-function TransactionForm({ onSaved }: { onSaved: QuickSheetProps['onSaved'] }) {
+type TransactionFormProps = {
+  initialType: TransactionType;
+  onSaved: QuickSheetProps['onSaved'];
+};
+
+function TransactionForm({ initialType, onSaved }: TransactionFormProps) {
   const { colors } = useAppTheme();
   const [transactionId] = useState(() => randomUUID());
   const [initialDate] = useState(() => toDateKey(new Date()));
-  const [type, setType] = useState<TransactionType>('expense');
+  const [type, setType] = useState<TransactionType>(initialType);
   const [amountCents, setAmountCents] = useState<number | null>(null);
   const [description, setDescription] = useState('');
   const [categoryId, setCategoryId] = useState<string | null>(null);
@@ -83,7 +88,7 @@ function TransactionForm({ onSaved }: { onSaved: QuickSheetProps['onSaved'] }) {
       installmentsText !== '1' ||
       recurring ||
       planned ||
-      !isExpense,
+      type !== initialType,
   );
 
   // Picking a suggestion registers it (with type and bank) the first time.
@@ -254,10 +259,20 @@ function TransactionForm({ onSaved }: { onSaved: QuickSheetProps['onSaved'] }) {
   );
 }
 
-export function TransactionQuickSheet({ onClose, onSaved, visible }: QuickSheetProps) {
+type TransactionQuickSheetProps = QuickSheetProps & {
+  /** Which segment starts selected (Despesa by default). */
+  initialType?: TransactionType;
+};
+
+export function TransactionQuickSheet({
+  initialType = 'expense',
+  onClose,
+  onSaved,
+  visible,
+}: TransactionQuickSheetProps) {
   return (
     <BottomSheet onRequestClose={onClose} title="Nova transação" visible={visible}>
-      <TransactionForm onSaved={onSaved} />
+      <TransactionForm initialType={initialType} onSaved={onSaved} />
     </BottomSheet>
   );
 }

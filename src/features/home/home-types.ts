@@ -36,18 +36,10 @@ export type HomeGoal = {
   icon: string | null;
 };
 
-export type HomeNote = {
-  id: string;
-  title: string;
-  preview: string;
-  pinned: boolean;
-};
-
 export type HomeSummary = {
   monthlyFinance: HomeMonthlyFinance;
   tasks: HomeTask[];
   plans: HomePlan[];
   wishlist: HomeWishlistItem[];
   goals: HomeGoal[];
-  notes: HomeNote[];
 };

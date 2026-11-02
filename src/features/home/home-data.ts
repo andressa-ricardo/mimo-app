@@ -107,6 +107,5 @@ export async function loadHomeSummary(): Promise<HomeSummary> {
     plans: [],
     wishlist,
     goals: [],
-    notes: [],
   };
 }
