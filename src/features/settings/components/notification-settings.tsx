@@ -7,7 +7,11 @@ import {
   getNotificationPreferences,
   saveNotificationPreferences,
 } from '@/database/repositories/preferences-repository';
-import { syncBillRemindersNow, syncTaskRemindersNow } from '@/services/notifications/notification-sync';
+import {
+  syncAppointmentRemindersNow,
+  syncBillRemindersNow,
+  syncTaskRemindersNow,
+} from '@/services/notifications/notification-sync';
 import {
   ensureReminderPermission,
   getExactAlarmStatus,
@@ -21,6 +25,7 @@ type PreferenceKey = keyof NotificationPreferences;
 
 const options: { key: PreferenceKey; label: string }[] = [
   { key: 'taskReminders', label: 'Lembretes de tarefas' },
+  { key: 'appointmentReminders', label: 'Lembretes de compromissos' },
   { key: 'billReminders', label: 'Vencimentos de contas' },
   { key: 'goalProgress', label: 'Progresso de metas' },
 ];
@@ -92,6 +97,7 @@ export function NotificationSettings({ onFeedback }: { onFeedback: (message: str
       // Rebuild the affected reminders so the change takes effect right away.
       if (key === 'taskReminders') await syncTaskRemindersNow();
       if (key === 'billReminders') await syncBillRemindersNow();
+      if (key === 'appointmentReminders') await syncAppointmentRemindersNow();
     } catch (error: unknown) {
       console.error('Falha ao salvar notificações.', error);
       onFeedback('Não foi possível salvar a preferência.');

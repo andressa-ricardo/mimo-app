@@ -125,6 +125,13 @@ export async function deleteTask(id: string): Promise<void> {
   await database.runAsync('DELETE FROM tasks WHERE id = ?', id);
 }
 
+/** Tasks due inside [start, end] — only the visible calendar range is queried. */
+export async function listTasksDueBetween(start: string, end: string): Promise<TaskItem[]> {
+  const database = await getDatabase();
+  const rows = await database.getAllAsync<TaskRow>(`${SELECT_TASKS} WHERE t.due_date BETWEEN ? AND ?`, start, end);
+  return rows.map(mapTask);
+}
+
 export async function getTask(id: string): Promise<TaskItem | null> {
   const database = await getDatabase();
   const row = await database.getFirstAsync<TaskRow>(`${SELECT_TASKS} WHERE t.id = ?`, id);

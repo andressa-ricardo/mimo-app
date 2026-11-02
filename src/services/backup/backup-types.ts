@@ -20,6 +20,9 @@ export const BACKUP_TABLES = [
   'goal_movements',
   'goal_sections',
   'goal_section_items',
+  'appointment_categories',
+  'appointments',
+  'appointment_exceptions',
 ] as const;
 
 export type BackupTable = (typeof BACKUP_TABLES)[number];

@@ -1,12 +1,3 @@
-import { PlaceholderScreen } from '@/components/placeholder-screen';
+import { CalendarScreen } from '@/features/calendar/calendar-screen';
 
-export default function CalendarScreen() {
-  return (
-    <PlaceholderScreen
-      icon="calendar-outline"
-      message="Sua agenda integrada aparecerá aqui."
-      secondary
-      title="Calendário"
-    />
-  );
-}
+export default CalendarScreen;

@@ -307,4 +307,84 @@ export const migrations: readonly Migration[] = [
       `);
     },
   },
+  {
+    version: 7,
+    name: 'create_appointments',
+    migrate: async (database) => {
+      // Dates are local calendar days (YYYY-MM-DD) and times local wall-clock
+      // HH:MM — never UTC timestamps — so an appointment stays on its day even
+      // when the device timezone or DST changes.
+      await database.execAsync(`
+        CREATE TABLE appointment_categories (
+          id TEXT PRIMARY KEY NOT NULL,
+          name TEXT NOT NULL CHECK (length(trim(name)) BETWEEN 1 AND 40),
+          color TEXT NOT NULL CHECK (color IN ('blue', 'orange', 'aqua', 'yellow', 'magenta', 'green', 'violet', 'red')),
+          icon TEXT NOT NULL,
+          sort_order INTEGER NOT NULL DEFAULT 0,
+          is_system INTEGER NOT NULL DEFAULT 0 CHECK (is_system IN (0, 1)),
+          archived_at INTEGER,
+          created_at INTEGER NOT NULL
+        );
+
+        CREATE UNIQUE INDEX appointment_categories_name_idx ON appointment_categories(name COLLATE NOCASE);
+
+        -- One row per appointment or recurring series. Occurrences are computed
+        -- for the visible range only; recurrence_until (inclusive) ends a
+        -- series early when it is split ("this and future occurrences").
+        CREATE TABLE appointments (
+          id TEXT PRIMARY KEY NOT NULL,
+          title TEXT NOT NULL CHECK (length(trim(title)) > 0),
+          description TEXT,
+          location TEXT,
+          category_id TEXT REFERENCES appointment_categories(id) ON DELETE SET NULL,
+          start_date TEXT NOT NULL CHECK (start_date GLOB '[0-9][0-9][0-9][0-9]-[0-1][0-9]-[0-3][0-9]'),
+          start_time TEXT CHECK (start_time IS NULL OR start_time GLOB '[0-2][0-9]:[0-5][0-9]'),
+          end_date TEXT NOT NULL CHECK (end_date GLOB '[0-9][0-9][0-9][0-9]-[0-1][0-9]-[0-3][0-9]'),
+          end_time TEXT CHECK (end_time IS NULL OR end_time GLOB '[0-2][0-9]:[0-5][0-9]'),
+          all_day INTEGER NOT NULL DEFAULT 0 CHECK (all_day IN (0, 1)),
+          recurrence TEXT NOT NULL DEFAULT 'none' CHECK (recurrence IN ('none', 'daily', 'weekly', 'monthly')),
+          recurrence_until TEXT CHECK (recurrence_until IS NULL OR recurrence_until GLOB '[0-9][0-9][0-9][0-9]-[0-1][0-9]-[0-3][0-9]'),
+          reminder_minutes INTEGER CHECK (reminder_minutes IS NULL OR reminder_minutes IN (0, 5, 15, 30, 60, 1440)),
+          created_at INTEGER NOT NULL,
+          updated_at INTEGER NOT NULL,
+          CHECK (end_date >= start_date),
+          CHECK (all_day = 1 OR (start_time IS NOT NULL AND end_time IS NOT NULL)),
+          CHECK (all_day = 1 OR end_date > start_date OR end_time >= start_time)
+        );
+
+        CREATE INDEX appointments_range_idx ON appointments(start_date, end_date);
+        CREATE INDEX appointments_recurrence_idx ON appointments(recurrence, recurrence_until);
+
+        -- Occurrences removed from a series ("only this occurrence").
+        CREATE TABLE appointment_exceptions (
+          appointment_id TEXT NOT NULL REFERENCES appointments(id) ON DELETE CASCADE,
+          occurrence_date TEXT NOT NULL CHECK (occurrence_date GLOB '[0-9][0-9][0-9][0-9]-[0-1][0-9]-[0-3][0-9]'),
+          created_at INTEGER NOT NULL,
+          PRIMARY KEY (appointment_id, occurrence_date)
+        );
+      `);
+
+      const now = Date.now();
+      const defaults: [name: string, color: string, icon: string][] = [
+        ['Pessoal', 'aqua', 'person-outline'],
+        ['Trabalho', 'blue', 'briefcase-outline'],
+        ['Estudos', 'violet', 'school-outline'],
+        ['Saúde', 'red', 'medkit-outline'],
+        ['Lazer', 'orange', 'happy-outline'],
+        ['Outros', 'magenta', 'ellipsis-horizontal-circle-outline'],
+      ];
+      for (const [index, [name, color, icon]] of defaults.entries()) {
+        await database.runAsync(
+          `INSERT OR IGNORE INTO appointment_categories (id, name, color, icon, sort_order, is_system, created_at)
+           VALUES (?, ?, ?, ?, ?, 1, ?)`,
+          `system-appointment-${index + 1}`,
+          name,
+          color,
+          icon,
+          index,
+          now,
+        );
+      }
+    },
+  },
 ];

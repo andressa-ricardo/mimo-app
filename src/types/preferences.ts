@@ -26,12 +26,14 @@ export const defaultProfilePreferences: ProfilePreferences = {
 
 export type NotificationPreferences = {
   taskReminders: boolean;
+  appointmentReminders: boolean;
   billReminders: boolean;
   goalProgress: boolean;
 };
 
 export const defaultNotificationPreferences: NotificationPreferences = {
   taskReminders: true,
+  appointmentReminders: true,
   billReminders: true,
   goalProgress: false,
 };

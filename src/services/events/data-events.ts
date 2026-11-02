@@ -1,4 +1,4 @@
-export type DataChangeScope = 'tasks' | 'finance' | 'wishlist' | 'goals';
+export type DataChangeScope = 'tasks' | 'finance' | 'wishlist' | 'goals' | 'appointments';
 
 type Listener = (scope: DataChangeScope) => void;
 

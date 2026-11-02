@@ -19,3 +19,28 @@ export function categoryColor(categoryId: string, isDark: boolean): string {
   for (const character of categoryId) hash = (hash * 31 + character.charCodeAt(0)) % 1_000_003;
   return palette[hash % palette.length];
 }
+
+/** Named slots of the validated palette, for categories whose color the user picks. */
+export const paletteColorKeys = ['blue', 'orange', 'aqua', 'yellow', 'magenta', 'green', 'violet', 'red'] as const;
+
+export type PaletteColorKey = (typeof paletteColorKeys)[number];
+
+export const paletteColorLabels: Record<PaletteColorKey, string> = {
+  blue: 'Azul',
+  orange: 'Laranja',
+  aqua: 'Água',
+  yellow: 'Amarelo',
+  magenta: 'Rosa',
+  green: 'Verde',
+  violet: 'Violeta',
+  red: 'Vermelho',
+};
+
+export function paletteColor(key: PaletteColorKey, isDark: boolean): string {
+  const index = paletteColorKeys.indexOf(key);
+  return (isDark ? darkPalette : lightPalette)[index];
+}
+
+export function isPaletteColorKey(value: string): value is PaletteColorKey {
+  return paletteColorKeys.some((key) => key === value);
+}

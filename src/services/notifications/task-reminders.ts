@@ -15,11 +15,12 @@ import {
 } from "expo-notifications";
 import { Platform } from "react-native";
 
-const TASK_CHANNEL_ID = "task-reminders";
+export const TASK_CHANNEL_ID = "task-reminders";
 export const BILL_CHANNEL_ID = "bill-reminders";
 
 export const TASK_REMINDER_KIND = "task-reminder";
 export const BILL_REMINDER_KIND = "bill-reminder";
+export const APPOINTMENT_REMINDER_KIND = "appointment-reminder";
 
 export type ReminderPermission = "granted" | "denied" | "unavailable";
 

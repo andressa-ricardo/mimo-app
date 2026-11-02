@@ -41,6 +41,8 @@ export default function SettingsScreen() {
     notifyDataChanged('tasks');
     notifyDataChanged('finance');
     notifyDataChanged('wishlist');
+    notifyDataChanged('goals');
+    notifyDataChanged('appointments');
     await syncAllReminders();
   }, [setPreferredName, updatePreferences]);
 

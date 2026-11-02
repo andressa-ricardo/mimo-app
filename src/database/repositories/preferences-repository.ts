@@ -91,6 +91,7 @@ export async function getNotificationPreferences(): Promise<NotificationPreferen
       typeof values[key] === 'boolean' ? (values[key] as boolean) : defaultNotificationPreferences[key];
     return {
       taskReminders: read('taskReminders'),
+      appointmentReminders: read('appointmentReminders'),
       billReminders: read('billReminders'),
       goalProgress: read('goalProgress'),
     };
