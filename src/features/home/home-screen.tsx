@@ -1,7 +1,7 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { Image } from 'expo-image';
-import { type Href, router } from 'expo-router';
-import { useCallback, useEffect, useState } from 'react';
+import { type Href, router, useFocusEffect } from 'expo-router';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   FlatList,
@@ -14,6 +14,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { AppText } from '@/components/ui/app-text';
 import { Toast, type ToastMessage } from '@/components/ui/toast';
+import { getTask } from '@/database/repositories/tasks-repository';
 import type {
   HomeGoal,
   HomeNote,
@@ -25,7 +26,9 @@ import { useHomeSummary } from '@/features/home/use-home-summary';
 import { TaskQuickSheet } from '@/features/quick-actions/task-quick-sheet';
 import { TransactionQuickSheet } from '@/features/quick-actions/transaction-quick-sheet';
 import { WishlistQuickSheet } from '@/features/quick-actions/wishlist-quick-sheet';
+import { toggleTaskCompleted } from '@/features/tasks/create-task';
 import { useAppTheme } from '@/theme/theme-provider';
+import type { TaskItem } from '@/types/tasks';
 import { formatCurrency, formatHomeDate, getGreeting, getLateNightMessage } from '@/utils/format';
 
 type SectionHeaderProps = {
@@ -161,15 +164,23 @@ function SecondaryShortcuts() {
   );
 }
 
-function TaskList({ tasks }: { tasks: HomeTask[] }) {
+type HomeTaskEntry = { task: HomeTask; done: boolean };
+
+type TaskListProps = {
+  entries: HomeTaskEntry[];
+  onEdit: (task: HomeTask) => void;
+  onToggle: (entry: HomeTaskEntry, index: number) => void;
+};
+
+function TaskList({ entries, onEdit, onToggle }: TaskListProps) {
   const { colors } = useAppTheme();
-  if (tasks.length === 0) {
+  if (entries.length === 0) {
     return <EmptyState icon="checkmark-circle-outline" message="Nenhuma tarefa próxima por aqui." />;
   }
 
   return (
     <View style={[styles.listCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-      {tasks.map((task, index) => {
+      {entries.map(({ task, done }, index) => {
         const statusColor = task.isOverdue
           ? colors.error
           : task.priority === 'high'
@@ -178,18 +189,44 @@ function TaskList({ tasks }: { tasks: HomeTask[] }) {
               ? colors.warning
               : colors.info;
         return (
-          <View
+          <Pressable
+            accessibilityHint="Abre a edição da tarefa"
+            accessibilityLabel={done ? `${task.title}, concluída` : task.title}
+            accessibilityRole="button"
             key={task.id}
-            style={[styles.taskRow, index > 0 && { borderTopColor: colors.border, borderTopWidth: 1 }]}>
-            <View style={[styles.taskCircle, { borderColor: colors.textSecondary }]} />
+            onPress={() => onEdit(task)}
+            style={({ pressed }) => [
+              styles.taskRow,
+              index > 0 && { borderTopColor: colors.border, borderTopWidth: 1 },
+              pressed && { backgroundColor: colors.muted },
+            ]}>
+            <Pressable
+              accessibilityLabel={done ? 'Marcar como não concluída' : 'Concluir tarefa'}
+              accessibilityRole="checkbox"
+              accessibilityState={{ checked: done }}
+              hitSlop={10}
+              onPress={() => onToggle({ task, done }, index)}
+              style={[
+                styles.taskCircle,
+                done
+                  ? { backgroundColor: colors.accent, borderColor: colors.accent }
+                  : { borderColor: colors.textSecondary },
+              ]}>
+              {done ? <Ionicons color={colors.onAccent} name="checkmark" size={11} /> : null}
+            </Pressable>
             <View style={styles.taskCopy}>
-              <AppText numberOfLines={1}>{task.title}</AppText>
+              <AppText
+                color={done ? 'secondary' : 'primary'}
+                numberOfLines={1}
+                style={done ? styles.taskDone : undefined}>
+                {task.title}
+              </AppText>
               <AppText color="secondary" numberOfLines={1} variant="caption">
                 {task.dueAt ?? 'Sem prazo'}
               </AppText>
             </View>
-            <View style={[styles.statusDot, { backgroundColor: statusColor }]} />
-          </View>
+            {done ? null : <View style={[styles.statusDot, { backgroundColor: statusColor }]} />}
+          </Pressable>
         );
       })}
     </View>
@@ -249,7 +286,14 @@ function WishlistList({ items }: { items: HomeWishlistItem[] }) {
       keyExtractor={(item) => item.id}
       maxToRenderPerBatch={4}
       renderItem={({ item }) => (
-        <View style={styles.wishlistItem}>
+        <Pressable
+          accessibilityHint="Abre o produto"
+          accessibilityLabel={item.name}
+          accessibilityRole="button"
+          onPress={() =>
+            router.push({ pathname: '/wishlist/[id]', params: { id: item.id } }, { withAnchor: true })
+          }
+          style={({ pressed }) => [styles.wishlistItem, pressed && styles.pressed]}>
           {item.imageUri ? (
             <Image cachePolicy="disk" contentFit="cover" source={item.imageUri} style={styles.wishlistImage} />
           ) : (
@@ -268,7 +312,7 @@ function WishlistList({ items }: { items: HomeWishlistItem[] }) {
           <AppText color="secondary" numberOfLines={1} variant="caption">
             {item.priceCents === null ? 'Preço não informado' : formatCurrency(item.priceCents)}
           </AppText>
-        </View>
+        </Pressable>
       )}
       showsHorizontalScrollIndicator={false}
     />
@@ -352,6 +396,58 @@ export function HomeScreen() {
 
   const closeSheet = useCallback(() => setActiveSheet(null), []);
   const hideToast = useCallback(() => setToast(null), []);
+  const [editingTask, setEditingTask] = useState<TaskItem | null>(null);
+  // Tasks checked here stay visible (struck through) until the user leaves the
+  // Home, so a check can be undone in place; the summary itself lists pending only.
+  const [checkedTasks, setCheckedTasks] = useState<Map<string, { task: HomeTask; index: number }>>(
+    () => new Map(),
+  );
+  const togglingIds = useRef(new Set<string>());
+
+  useFocusEffect(
+    useCallback(
+      () => () => {
+        setCheckedTasks(new Map());
+      },
+      [],
+    ),
+  );
+
+  const closeTaskEdit = useCallback(() => setEditingTask(null), []);
+  const handleTaskEdited = useCallback((text: string) => {
+    setEditingTask(null);
+    setToast({ id: Date.now(), text });
+  }, []);
+
+  const openTaskEdit = async (task: HomeTask) => {
+    try {
+      const full = await getTask(task.id);
+      if (full) setEditingTask(full);
+    } catch (error: unknown) {
+      console.error('Falha ao abrir tarefa.', error);
+      setToast({ id: Date.now(), text: 'Não foi possível abrir a tarefa.' });
+    }
+  };
+
+  const toggleTask = async ({ task, done }: HomeTaskEntry, index: number) => {
+    if (togglingIds.current.has(task.id)) return;
+    togglingIds.current.add(task.id);
+    setCheckedTasks((current) => {
+      const next = new Map(current);
+      if (done) next.delete(task.id);
+      else next.set(task.id, { task, index });
+      return next;
+    });
+    try {
+      await toggleTaskCompleted(task.id, !done);
+    } catch (error: unknown) {
+      console.error('Falha ao concluir tarefa.', error);
+      setToast({ id: Date.now(), text: 'Não foi possível atualizar a tarefa.' });
+    } finally {
+      togglingIds.current.delete(task.id);
+    }
+  };
+
   const handleSaved = useCallback((text: string) => {
     setActiveSheet(null);
     setToast({ id: Date.now(), text });
@@ -379,6 +475,12 @@ export function HomeScreen() {
   }
 
   const data = summary.data;
+  const taskEntries: HomeTaskEntry[] = data.tasks
+    .filter((task) => !checkedTasks.has(task.id))
+    .map((task) => ({ task, done: false }));
+  for (const { task, index } of [...checkedTasks.values()].sort((a, b) => a.index - b.index)) {
+    taskEntries.splice(Math.min(index, taskEntries.length), 0, { task, done: true });
+  }
 
   return (
     <SafeAreaView edges={['top']} style={[styles.screen, { backgroundColor: colors.background }]}>
@@ -422,7 +524,11 @@ export function HomeScreen() {
 
         <View style={styles.section}>
           <SectionHeader href="/(tabs)/tasks" title="Próximas tarefas" />
-          <TaskList tasks={data.tasks} />
+          <TaskList
+            entries={taskEntries}
+            onEdit={(task) => void openTaskEdit(task)}
+            onToggle={(entry, index) => void toggleTask(entry, index)}
+          />
         </View>
 
         <View style={styles.section}>
@@ -448,6 +554,12 @@ export function HomeScreen() {
 
       <Toast message={toast} onHide={hideToast} />
       <TaskQuickSheet onClose={closeSheet} onSaved={handleSaved} visible={activeSheet === 'task'} />
+      <TaskQuickSheet
+        onClose={closeTaskEdit}
+        onSaved={handleTaskEdited}
+        task={editingTask}
+        visible={editingTask !== null}
+      />
       <TransactionQuickSheet onClose={closeSheet} onSaved={handleSaved} visible={activeSheet === 'transaction'} />
       <WishlistQuickSheet onClose={closeSheet} onSaved={handleSaved} visible={activeSheet === 'wishlist'} />
     </SafeAreaView>
@@ -668,10 +780,15 @@ const styles = StyleSheet.create({
     width: 6,
   },
   taskCircle: {
+    alignItems: 'center',
     borderRadius: 8,
     borderWidth: 1.4,
     height: 16,
+    justifyContent: 'center',
     width: 16,
+  },
+  taskDone: {
+    textDecorationLine: 'line-through',
   },
   taskCopy: {
     flex: 1,

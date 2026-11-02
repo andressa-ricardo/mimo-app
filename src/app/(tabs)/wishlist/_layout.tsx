@@ -2,6 +2,9 @@ import { Stack } from 'expo-router';
 
 import { useAppTheme } from '@/theme/theme-provider';
 
+// Keeps the list under a product opened from elsewhere (e.g. the Home).
+export const unstable_settings = { initialRouteName: 'index' };
+
 export default function WishlistLayout() {
   const { colors } = useAppTheme();
 

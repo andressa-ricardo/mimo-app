@@ -63,14 +63,13 @@ type TaskRow = {
   created_at: number;
 };
 
-export async function listTasks(): Promise<TaskItem[]> {
-  const database = await getDatabase();
-  const rows = await database.getAllAsync<TaskRow>(
-    `SELECT t.id, t.title, t.description, t.category_id, c.name AS category_name, t.due_date, t.due_time,
-       t.priority, t.reminder_enabled, t.completed_at, t.created_at
-     FROM tasks t LEFT JOIN categories c ON c.id = t.category_id`,
-  );
-  return rows.map((row) => ({
+const SELECT_TASKS = `
+  SELECT t.id, t.title, t.description, t.category_id, c.name AS category_name, t.due_date, t.due_time,
+    t.priority, t.reminder_enabled, t.completed_at, t.created_at
+  FROM tasks t LEFT JOIN categories c ON c.id = t.category_id`;
+
+function mapTask(row: TaskRow): TaskItem {
+  return {
     id: row.id,
     title: row.title,
     description: row.description,
@@ -82,7 +81,12 @@ export async function listTasks(): Promise<TaskItem[]> {
     reminderEnabled: row.reminder_enabled === 1,
     completedAt: row.completed_at,
     createdAt: row.created_at,
-  }));
+  };
+}
+
+export async function listTasks(): Promise<TaskItem[]> {
+  const database = await getDatabase();
+  return (await database.getAllAsync<TaskRow>(SELECT_TASKS)).map(mapTask);
 }
 
 /** Saves edits. The reminder choice is kept even if it cannot be scheduled right now. */
@@ -119,4 +123,10 @@ export async function setTaskCompleted(id: string, completed: boolean): Promise<
 export async function deleteTask(id: string): Promise<void> {
   const database = await getDatabase();
   await database.runAsync('DELETE FROM tasks WHERE id = ?', id);
+}
+
+export async function getTask(id: string): Promise<TaskItem | null> {
+  const database = await getDatabase();
+  const row = await database.getFirstAsync<TaskRow>(`${SELECT_TASKS} WHERE t.id = ?`, id);
+  return row ? mapTask(row) : null;
 }
