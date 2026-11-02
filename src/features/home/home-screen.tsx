@@ -26,7 +26,7 @@ import { TaskQuickSheet } from '@/features/quick-actions/task-quick-sheet';
 import { TransactionQuickSheet } from '@/features/quick-actions/transaction-quick-sheet';
 import { WishlistQuickSheet } from '@/features/quick-actions/wishlist-quick-sheet';
 import { useAppTheme } from '@/theme/theme-provider';
-import { formatCurrency, formatHomeDate, getGreeting } from '@/utils/format';
+import { formatCurrency, formatHomeDate, getGreeting, getLateNightMessage } from '@/utils/format';
 
 type SectionHeaderProps = {
   href: Href;
@@ -348,6 +348,7 @@ export function HomeScreen() {
   const [activeSheet, setActiveSheet] = useState<QuickActionSheet | null>(null);
   const [toast, setToast] = useState<ToastMessage | null>(null);
   const firstLetter = profile.preferredName.charAt(0).toUpperCase() || 'M';
+  const lateNightMessage = getLateNightMessage(now);
 
   const closeSheet = useCallback(() => setActiveSheet(null), []);
   const hideToast = useCallback(() => setToast(null), []);
@@ -395,6 +396,11 @@ export function HomeScreen() {
               </AppText>
               <Ionicons color={colors.text} name="sparkles" size={19} />
             </View>
+            {lateNightMessage ? (
+              <AppText color="secondary" style={styles.lateNight} variant="caption">
+                {lateNightMessage}
+              </AppText>
+            ) : null}
           </View>
           <Pressable
             accessibilityLabel="Abrir ajustes"
@@ -544,6 +550,9 @@ const styles = StyleSheet.create({
   imageFallback: {
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  lateNight: {
+    marginTop: 3,
   },
   listCard: {
     borderRadius: 18,
