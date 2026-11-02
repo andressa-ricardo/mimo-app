@@ -1,3 +1,4 @@
+import type { PreparedImage } from '@/services/images/image-storage';
 import type { Priority } from '@/types/tasks';
 
 export type NewWishlistItemInput = {
@@ -9,3 +10,16 @@ export type NewWishlistItemInput = {
   priority: Priority;
   notes: string | null;
 };
+
+export type WishlistItem = NewWishlistItemInput & {
+  categoryName: string | null;
+  imageUri: string | null;
+  purchasedAt: number | null;
+  purchaseTransactionId: string | null;
+  createdAt: number;
+};
+
+export type WishlistImageChange =
+  | { kind: 'keep' }
+  | { kind: 'remove' }
+  | { kind: 'replace'; image: PreparedImage };

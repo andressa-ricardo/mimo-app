@@ -165,4 +165,14 @@ export const migrations: readonly Migration[] = [
       }
     },
   },
+  {
+    version: 3,
+    name: 'link_wishlist_purchase_to_transaction',
+    migrate: async (database) => {
+      await database.execAsync(`
+        ALTER TABLE wishlist_items ADD COLUMN purchase_transaction_id TEXT
+          REFERENCES financial_transactions(id) ON DELETE SET NULL;
+      `);
+    },
+  },
 ];

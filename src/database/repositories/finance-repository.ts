@@ -1,49 +1,53 @@
 import { randomUUID } from 'expo-crypto';
+import type { SQLiteDatabase } from 'expo-sqlite';
 
 import { getDatabase } from '@/database/client';
 import { buildEntryDrafts, projectRecurringOccurrences } from '@/features/finance/finance-calculations';
 import type { NewTransactionInput, TransactionType } from '@/types/finance';
 import type { DateKey } from '@/utils/date';
 
-export async function insertTransaction(input: NewTransactionInput): Promise<void> {
-  const database = await getDatabase();
+/** Writes a transaction and its entries; the caller owns the SQL transaction. */
+export async function insertTransactionRows(transaction: SQLiteDatabase, input: NewTransactionInput): Promise<void> {
   const entries = buildEntryDrafts(input);
   const now = Date.now();
 
-  await database.withExclusiveTransactionAsync(async (transaction) => {
+  await transaction.runAsync(
+    `INSERT INTO financial_transactions (
+       id, type, description, amount_cents, category_id, payment_method_id, transaction_date,
+       installment_count, recurrence_frequency, recurrence_interval, status, created_at, updated_at
+     ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?, ?)`,
+    input.id,
+    input.type,
+    input.description,
+    input.amountCents,
+    input.categoryId,
+    input.paymentMethodId,
+    input.date,
+    input.recurring ? 1 : input.installmentCount,
+    input.recurring ? 'monthly' : null,
+    input.status,
+    now,
+    now,
+  );
+
+  for (const entry of entries) {
     await transaction.runAsync(
-      `INSERT INTO financial_transactions (
-         id, type, description, amount_cents, category_id, payment_method_id, transaction_date,
-         installment_count, recurrence_frequency, recurrence_interval, status, created_at, updated_at
-       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?, ?)`,
+      `INSERT INTO financial_entries (id, transaction_id, sequence, amount_cents, due_date, status, created_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?)`,
+      randomUUID(),
       input.id,
-      input.type,
-      input.description,
-      input.amountCents,
-      input.categoryId,
-      input.paymentMethodId,
-      input.date,
-      input.recurring ? 1 : input.installmentCount,
-      input.recurring ? 'monthly' : null,
-      input.status,
-      now,
+      entry.sequence,
+      entry.amountCents,
+      entry.dueDate,
+      entry.status,
       now,
     );
+  }
+}
 
-    for (const entry of entries) {
-      await transaction.runAsync(
-        `INSERT INTO financial_entries (id, transaction_id, sequence, amount_cents, due_date, status, created_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?)`,
-        randomUUID(),
-        input.id,
-        entry.sequence,
-        entry.amountCents,
-        entry.dueDate,
-        entry.status,
-        now,
-      );
-    }
-  });
+export async function insertTransaction(input: NewTransactionInput): Promise<void> {
+  const database = await getDatabase();
+  await database.withExclusiveTransactionAsync((transaction) => insertTransactionRows(transaction, input));
 }
 
 type RecurringRow = {

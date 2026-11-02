@@ -2,7 +2,7 @@ import { getDatabase } from '@/database/client';
 import { getConfirmedTotal } from '@/database/repositories/finance-repository';
 import { WISHLIST_FILE_OWNER } from '@/database/repositories/wishlist-repository';
 import type { HomeSummary, HomeTask, HomeWishlistItem } from '@/features/home/home-types';
-import { resolveStoredImage } from '@/services/images/image-storage';
+import { storedImageUri } from '@/services/images/image-storage';
 import { getMonthRange, parseDateKey, toDateKey, toTimeKey, type DateKey } from '@/utils/date';
 
 const HOME_TASK_LIMIT = 5;
@@ -78,18 +78,12 @@ async function loadWishlist(): Promise<HomeWishlistItem[]> {
     HOME_WISHLIST_LIMIT,
   );
 
-  return rows.map((row) => {
-    let imageUri: string | null = null;
-    if (row.relative_path) {
-      try {
-        const file = resolveStoredImage(row.relative_path);
-        imageUri = file.exists ? file.uri : null;
-      } catch {
-        imageUri = null;
-      }
-    }
-    return { id: row.id, name: row.name, priceCents: row.price_cents, imageUri };
-  });
+  return rows.map((row) => ({
+    id: row.id,
+    name: row.name,
+    priceCents: row.price_cents,
+    imageUri: storedImageUri(row.relative_path),
+  }));
 }
 
 /**

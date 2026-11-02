@@ -17,7 +17,7 @@ import { SegmentedControl } from '@/components/forms/segmented-control';
 import { SelectField } from '@/components/forms/select-field';
 import { FormField, TextField } from '@/components/forms/text-field';
 import { AppText } from '@/components/ui/app-text';
-import { insertWishlistItem } from '@/database/repositories/wishlist-repository';
+import { insertWishlistItem, updateWishlistItem } from '@/database/repositories/wishlist-repository';
 import { FormError, formStyles } from '@/features/quick-actions/form-parts';
 import {
   describeError,
@@ -34,6 +34,7 @@ import {
 } from '@/services/images/image-storage';
 import { useAppTheme } from '@/theme/theme-provider';
 import type { Priority } from '@/types/tasks';
+import type { WishlistImageChange, WishlistItem } from '@/types/wishlist';
 
 const URL_PATTERN = /^https?:\/\/[^\s/.]+\.[^\s]+$/i;
 
@@ -44,16 +45,22 @@ function normalizeUrl(text: string): { value: string | null; valid: boolean } {
   return { value: withScheme, valid: URL_PATTERN.test(withScheme) };
 }
 
-function WishlistForm({ onSaved }: { onSaved: QuickSheetProps['onSaved'] }) {
+type WishlistFormProps = {
+  item: WishlistItem | null;
+  onSaved: QuickSheetProps['onSaved'];
+};
+
+function WishlistForm({ item, onSaved }: WishlistFormProps) {
   const { colors } = useAppTheme();
-  const [itemId] = useState(() => randomUUID());
-  const [imageUri, setImageUri] = useState<string | null>(null);
-  const [name, setName] = useState('');
-  const [priceCents, setPriceCents] = useState<number | null>(null);
-  const [categoryId, setCategoryId] = useState<string | null>(null);
-  const [priority, setPriority] = useState<Priority>('medium');
-  const [productUrl, setProductUrl] = useState('');
-  const [notes, setNotes] = useState('');
+  const [itemId] = useState(() => item?.id ?? randomUUID());
+  const [initialImageUri] = useState(() => item?.imageUri ?? null);
+  const [imageUri, setImageUri] = useState<string | null>(initialImageUri);
+  const [name, setName] = useState(item?.name ?? '');
+  const [priceCents, setPriceCents] = useState<number | null>(item?.priceCents ?? null);
+  const [categoryId, setCategoryId] = useState<string | null>(item?.categoryId ?? null);
+  const [priority, setPriority] = useState<Priority>(item?.priority ?? 'medium');
+  const [productUrl, setProductUrl] = useState(item?.productUrl ?? '');
+  const [notes, setNotes] = useState(item?.notes ?? '');
   const [errors, setErrors] = useState<{ name?: string; url?: string }>({});
   const [formError, setFormError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
@@ -62,13 +69,13 @@ function WishlistForm({ onSaved }: { onSaved: QuickSheetProps['onSaved'] }) {
   const { categories, addCategory } = useCategories('wishlist');
 
   useBottomSheetDirty(
-    imageUri !== null ||
-      name.trim().length > 0 ||
-      priceCents !== null ||
-      categoryId !== null ||
-      priority !== 'medium' ||
-      productUrl.trim().length > 0 ||
-      notes.trim().length > 0,
+    imageUri !== initialImageUri ||
+      name.trim() !== (item?.name ?? '') ||
+      priceCents !== (item?.priceCents ?? null) ||
+      categoryId !== (item?.categoryId ?? null) ||
+      priority !== (item?.priority ?? 'medium') ||
+      productUrl.trim() !== (item?.productUrl ?? '') ||
+      notes.trim() !== (item?.notes ?? ''),
   );
 
   // The picker's cache copy is temporary whether the item is saved or discarded.
@@ -81,7 +88,7 @@ function WishlistForm({ onSaved }: { onSaved: QuickSheetProps['onSaved'] }) {
 
   const replaceImage = (uri: string | null) => {
     if (pickedUriRef.current && pickedUriRef.current !== uri) discardTemporaryImage(pickedUriRef.current);
-    pickedUriRef.current = uri;
+    pickedUriRef.current = uri === initialImageUri ? null : uri;
     setImageUri(uri);
   };
 
@@ -109,21 +116,30 @@ function WishlistForm({ onSaved }: { onSaved: QuickSheetProps['onSaved'] }) {
     setFormError(null);
     let image: PreparedImage | null = null;
     try {
-      if (imageUri) image = await prepareImageForStorage(imageUri);
-      await insertWishlistItem(
-        {
-          id: itemId,
-          name: normalizedName,
-          priceCents,
-          productUrl: url.value,
-          categoryId,
-          priority,
-          notes: notes.trim() || null,
-        },
-        image,
-      );
+      const imageChanged = imageUri !== initialImageUri;
+      if (imageUri && imageChanged) image = await prepareImageForStorage(imageUri);
+      const input = {
+        id: itemId,
+        name: normalizedName,
+        priceCents,
+        productUrl: url.value,
+        categoryId,
+        priority,
+        notes: notes.trim() || null,
+      };
+
+      if (item) {
+        const imageChange: WishlistImageChange = !imageChanged
+          ? { kind: 'keep' }
+          : image
+            ? { kind: 'replace', image }
+            : { kind: 'remove' };
+        await updateWishlistItem(input, imageChange);
+      } else {
+        await insertWishlistItem(input, image);
+      }
       notifyDataChanged('wishlist');
-      onSaved('Desejo salvo.');
+      onSaved(item ? 'Desejo atualizado.' : 'Desejo salvo.');
     } catch (error: unknown) {
       if (image) discardPreparedImage(image);
       setFormError(describeError(error, 'Não foi possível salvar o desejo. Tente novamente.'));
@@ -247,10 +263,15 @@ function WishlistForm({ onSaved }: { onSaved: QuickSheetProps['onSaved'] }) {
   );
 }
 
-export function WishlistQuickSheet({ onClose, onSaved, visible }: QuickSheetProps) {
+type WishlistQuickSheetProps = QuickSheetProps & {
+  /** When set, the sheet edits this item instead of creating a new one. */
+  item?: WishlistItem | null;
+};
+
+export function WishlistQuickSheet({ item = null, onClose, onSaved, visible }: WishlistQuickSheetProps) {
   return (
-    <BottomSheet onRequestClose={onClose} title="Novo desejo" visible={visible}>
-      <WishlistForm onSaved={onSaved} />
+    <BottomSheet onRequestClose={onClose} title={item ? 'Editar desejo' : 'Novo desejo'} visible={visible}>
+      <WishlistForm item={item} onSaved={onSaved} />
     </BottomSheet>
   );
 }

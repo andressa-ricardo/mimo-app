@@ -127,6 +127,28 @@ export async function prepareImageForStorage(sourceUri: string): Promise<Prepare
   }
 }
 
+/** URI for a stored image, or null when the reference is missing or broken. */
+export function storedImageUri(relativePath: string | null): string | null {
+  if (!relativePath) return null;
+  try {
+    const file = resolveStoredImage(relativePath);
+    return file.exists ? file.uri : null;
+  } catch {
+    return null;
+  }
+}
+
+/** Removes files whose database rows were already deleted. */
+export function deleteStoredImageFiles(relativePaths: string[]): void {
+  for (const relativePath of relativePaths) {
+    try {
+      deleteIfExists(resolveStoredImage(relativePath));
+    } catch (error: unknown) {
+      console.warn('Não foi possível remover uma imagem órfã.', error);
+    }
+  }
+}
+
 /** Rolls back a prepared image whose database registration failed. */
 export function discardPreparedImage(image: PreparedImage): void {
   if (image.isNew) deleteIfExists(resolveStoredImage(image.relativePath));
