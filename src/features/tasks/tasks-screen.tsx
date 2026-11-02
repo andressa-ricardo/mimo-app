@@ -268,7 +268,11 @@ export function TasksScreen() {
           <MoreModulesMenu />
         </View>
 
-        <ScrollView contentContainerStyle={styles.chips} horizontal showsHorizontalScrollIndicator={false}>
+        <ScrollView
+          contentContainerStyle={styles.chips}
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          style={styles.chipRow}>
           {filters.map((option) => (
             <FilterChip
               key={option.value}
@@ -340,6 +344,10 @@ const styles = StyleSheet.create({
     height: 20,
     justifyContent: 'center',
     width: 20,
+  },
+  // Horizontal ScrollViews grow by default; keep the chip row at its natural height.
+  chipRow: {
+    flexGrow: 0,
   },
   chips: {
     gap: 7,
