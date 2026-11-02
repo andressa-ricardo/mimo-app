@@ -1,7 +1,9 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
+import { useState } from 'react';
 import { ActivityIndicator, Pressable, StyleSheet, View } from 'react-native';
 
 import { AppText } from '@/components/ui/app-text';
+import { CategoryPieChart } from '@/features/finance/components/category-pie-chart';
 import { SpendingTrendChart } from '@/features/finance/components/spending-trend-chart';
 import {
   Card,
@@ -49,6 +51,7 @@ export function SummaryTab({ confirmingKey, data, monthKey, onConfirm, onSelectT
   const balanceColor =
     summary.balanceCents < 0 ? colors.expense : summary.balanceCents > 0 ? colors.income : colors.text;
   const topCategory = summary.byCategory[0]?.amountCents ?? 0;
+  const [categoryView, setCategoryView] = useState<'bars' | 'pie'>('bars');
 
   return (
     <View style={styles.container}>
@@ -77,9 +80,41 @@ export function SummaryTab({ confirmingKey, data, monthKey, onConfirm, onSelectT
       <SpendingTrendChart onSelect={onSelectTrend} points={data.trend} selectedKey={monthKey} />
 
       <View style={styles.section}>
-        <SectionHeader title="Gastos por categoria" />
+        <View style={styles.sectionHeader}>
+          <AppText accessibilityRole="header" variant="section">
+            Gastos por categoria
+          </AppText>
+          {summary.byCategory.length > 0 ? (
+            <View accessibilityRole="radiogroup" style={[styles.viewToggle, { backgroundColor: colors.muted }]}>
+              {(
+                [
+                  { value: 'bars', icon: 'bar-chart-outline', label: 'Ver como barras' },
+                  { value: 'pie', icon: 'pie-chart-outline', label: 'Ver como pizza' },
+                ] as const
+              ).map((option) => {
+                const selected = categoryView === option.value;
+                return (
+                  <Pressable
+                    accessibilityLabel={option.label}
+                    accessibilityRole="radio"
+                    accessibilityState={{ checked: selected }}
+                    hitSlop={4}
+                    key={option.value}
+                    onPress={() => setCategoryView(option.value)}
+                    style={[styles.toggleOption, selected && { backgroundColor: colors.surface }]}>
+                    <Ionicons color={selected ? colors.accent : colors.textSecondary} name={option.icon} size={16} />
+                  </Pressable>
+                );
+              })}
+            </View>
+          ) : null}
+        </View>
         {summary.byCategory.length === 0 ? (
           <EmptyNote>Nenhuma despesa confirmada neste mês.</EmptyNote>
+        ) : categoryView === 'pie' ? (
+          <Card style={styles.listCard}>
+            <CategoryPieChart categories={summary.byCategory} />
+          </Card>
         ) : (
           <Card style={styles.listCard}>
             {summary.byCategory.map((category) => (
@@ -231,6 +266,18 @@ const styles = StyleSheet.create({
   section: {
     gap: 10,
   },
+  sectionHeader: {
+    alignItems: 'center',
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+  },
+  toggleOption: {
+    alignItems: 'center',
+    borderRadius: 9,
+    height: 28,
+    justifyContent: 'center',
+    width: 34,
+  },
   tile: {
     borderRadius: 16,
     flex: 1,
@@ -250,6 +297,12 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     gap: 10,
     marginTop: 14,
+  },
+  viewToggle: {
+    borderRadius: 11,
+    flexDirection: 'row',
+    gap: 2,
+    padding: 2,
   },
   upcomingIcon: {
     alignItems: 'center',

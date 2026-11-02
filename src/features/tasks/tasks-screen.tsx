@@ -7,6 +7,7 @@ import { MoreModulesMenu } from '@/components/navigation/more-modules-menu';
 import { AppText } from '@/components/ui/app-text';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { FilterChip } from '@/components/ui/filter-chip';
+import { SwipeView } from '@/components/ui/swipe-view';
 import { Toast, type ToastMessage } from '@/components/ui/toast';
 import { listTasks } from '@/database/repositories/tasks-repository';
 import { useNow } from '@/features/quick-actions/use-form-options';
@@ -25,6 +26,8 @@ const filters: { value: Filter; label: string }[] = [
   { value: 'overdue', label: 'Atrasadas' },
   { value: 'done', label: 'Concluídas' },
 ];
+
+const filterOrder = filters.map((option) => option.value);
 
 const emptyMessages: Record<Filter, string> = {
   upcoming: 'Nenhuma tarefa por vir. Use “+ Tarefa” na Home para criar uma.',
@@ -197,10 +200,18 @@ export function TasksScreen() {
   const today = toDateKey(nowDate);
   const nowTime = toTimeKey(nowDate);
 
-  const changeFilter = (next: Filter) => {
+  const changeFilter = useCallback((next: Filter) => {
     setFilter(next);
     setKeptIds(new Set());
-  };
+  }, []);
+  const showNextFilter = useCallback(
+    () => changeFilter(filterOrder[Math.min(filterOrder.indexOf(filter) + 1, filterOrder.length - 1)]),
+    [changeFilter, filter],
+  );
+  const showPreviousFilter = useCallback(
+    () => changeFilter(filterOrder[Math.max(filterOrder.indexOf(filter) - 1, 0)]),
+    [changeFilter, filter],
+  );
 
   const matchesFilter = (task: TaskItem): boolean => {
     if (keptIds.has(task.id)) return true;
@@ -268,6 +279,7 @@ export function TasksScreen() {
           ))}
         </ScrollView>
 
+        <SwipeView onSwipeLeft={showNextFilter} onSwipeRight={showPreviousFilter} style={styles.swipeArea}>
         {state.status === 'loading' ? (
           <ActivityIndicator color={colors.accent} style={styles.message} />
         ) : state.status === 'error' && state.tasks.length === 0 ? (
@@ -295,6 +307,7 @@ export function TasksScreen() {
             ))}
           </View>
         )}
+        </SwipeView>
       </ScrollView>
 
       <Toast message={toast} onHide={hideToast} />
@@ -333,6 +346,7 @@ const styles = StyleSheet.create({
   },
   content: {
     alignSelf: 'center',
+    flexGrow: 1,
     gap: 14,
     maxWidth: 560,
     paddingBottom: 32,
@@ -389,5 +403,9 @@ const styles = StyleSheet.create({
   },
   screen: {
     flex: 1,
+  },
+  // Fills the rest of the screen so swiping works below a short list too.
+  swipeArea: {
+    flexGrow: 1,
   },
 });

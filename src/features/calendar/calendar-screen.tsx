@@ -6,6 +6,7 @@ import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 
 import { SegmentedControl } from '@/components/forms/segmented-control';
 import { AppText } from '@/components/ui/app-text';
+import { SwipeView } from '@/components/ui/swipe-view';
 import { Toast, type ToastMessage } from '@/components/ui/toast';
 import { getTask } from '@/database/repositories/tasks-repository';
 import { useCalendarRange } from '@/features/calendar/calendar-data';
@@ -103,13 +104,17 @@ export function CalendarScreen() {
     [showToast],
   );
 
-  const shift = (direction: 1 | -1) => {
-    setSelected((current) =>
-      view === 'month'
-        ? addMonthsToDateKey(current, direction)
-        : addDaysToDateKey(current, view === 'week' ? direction * 7 : direction),
-    );
-  };
+  const shift = useCallback(
+    (direction: 1 | -1) =>
+      setSelected((current) =>
+        view === 'month'
+          ? addMonthsToDateKey(current, direction)
+          : addDaysToDateKey(current, view === 'week' ? direction * 7 : direction),
+      ),
+    [view],
+  );
+  const showNext = useCallback(() => shift(1), [shift]);
+  const showPrevious = useCallback(() => shift(-1), [shift]);
 
   const openEvent = async (event: CalendarEvent) => {
     const ref = event.ref;
@@ -199,24 +204,33 @@ export function CalendarScreen() {
 
         <SegmentedControl accessibilityLabel="Visualização" onChange={setView} options={viewOptions} value={view} />
 
-        {view === 'month' ? (
-          <MonthGrid dotsFor={dotsFor} monthStart={startOfMonth(selected)} onSelect={setSelected} selected={selected} today={today} />
-        ) : view === 'week' ? (
-          <WeekStrip dotsFor={dotsFor} onSelect={setSelected} selected={selected} today={today} />
-        ) : null}
+        {/* Swiping the calendar or the agenda moves to the next/previous month, week or day. */}
+        <SwipeView onSwipeLeft={showNext} onSwipeRight={showPrevious} style={styles.swipeArea}>
+          {view === 'month' ? (
+            <MonthGrid
+              dotsFor={dotsFor}
+              monthStart={startOfMonth(selected)}
+              onSelect={setSelected}
+              selected={selected}
+              today={today}
+            />
+          ) : view === 'week' ? (
+            <WeekStrip dotsFor={dotsFor} onSelect={setSelected} selected={selected} today={today} />
+          ) : null}
 
-        {ready ? (
-          <DayAgenda
-            date={selected}
-            events={byDay.get(selected) ?? []}
-            onAdd={() => setSheet({ kind: 'create', date: selected })}
-            onPressEvent={(event) => void openEvent(event)}
-            onToggleTask={(event) => void toggleTask(event)}
-            today={today}
-          />
-        ) : (
-          <ActivityIndicator color={colors.accent} style={styles.loading} />
-        )}
+          {ready ? (
+            <DayAgenda
+              date={selected}
+              events={byDay.get(selected) ?? []}
+              onAdd={() => setSheet({ kind: 'create', date: selected })}
+              onPressEvent={(event) => void openEvent(event)}
+              onToggleTask={(event) => void toggleTask(event)}
+              today={today}
+            />
+          ) : (
+            <ActivityIndicator color={colors.accent} style={styles.loading} />
+          )}
+        </SwipeView>
       </ScrollView>
 
       <Pressable
@@ -302,6 +316,9 @@ const styles = StyleSheet.create({
   },
   screen: {
     flex: 1,
+  },
+  swipeArea: {
+    gap: 14,
   },
   title: {
     flex: 1,

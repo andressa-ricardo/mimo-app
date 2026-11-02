@@ -7,6 +7,7 @@ import { SegmentedControl } from '@/components/forms/segmented-control';
 import { MoreModulesMenu } from '@/components/navigation/more-modules-menu';
 import { AppText } from '@/components/ui/app-text';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
+import { SwipeView } from '@/components/ui/swipe-view';
 import { Toast, type ToastMessage } from '@/components/ui/toast';
 import { confirmEntry } from '@/database/repositories/finance-repository';
 import { capitalize, formatShortDate } from '@/features/finance/components/finance-ui';
@@ -57,7 +58,8 @@ export function FinanceScreen() {
     [showToast],
   );
 
-  const shiftMonth = (delta: number) => setMonthStart((current) => addMonthsToDateKey(current, delta));
+  const showNextMonth = useCallback(() => setMonthStart((current) => addMonthsToDateKey(current, 1)), []);
+  const showPreviousMonth = useCallback(() => setMonthStart((current) => addMonthsToDateKey(current, -1)), []);
 
   const confirm = async (entry: MonthEntry) => {
     if (confirmingRef.current) return;
@@ -95,7 +97,7 @@ export function FinanceScreen() {
             accessibilityLabel="Mês anterior"
             accessibilityRole="button"
             hitSlop={8}
-            onPress={() => shiftMonth(-1)}
+            onPress={showPreviousMonth}
             style={({ pressed }) => [styles.monthButton, pressed && styles.pressed]}>
             <Ionicons color={colors.text} name="chevron-back" size={18} />
           </Pressable>
@@ -106,7 +108,7 @@ export function FinanceScreen() {
             accessibilityLabel="Próximo mês"
             accessibilityRole="button"
             hitSlop={8}
-            onPress={() => shiftMonth(1)}
+            onPress={showNextMonth}
             style={({ pressed }) => [styles.monthButton, pressed && styles.pressed]}>
             <Ionicons color={colors.text} name="chevron-forward" size={18} />
           </Pressable>
@@ -136,29 +138,32 @@ export function FinanceScreen() {
 
         <SegmentedControl accessibilityLabel="Seções de Finanças" onChange={setTab} options={tabOptions} value={tab} />
 
-        {data === null ? (
-          state.status === 'error' ? (
-            <AppText color="secondary" style={styles.message}>
-              Não foi possível carregar suas finanças.
-            </AppText>
+        {/* Swiping the content moves to the next/previous month. */}
+        <SwipeView onSwipeLeft={showNextMonth} onSwipeRight={showPreviousMonth}>
+          {data === null ? (
+            state.status === 'error' ? (
+              <AppText color="secondary" style={styles.message}>
+                Não foi possível carregar suas finanças.
+              </AppText>
+            ) : (
+              <ActivityIndicator color={colors.accent} style={styles.message} />
+            )
+          ) : tab === 'summary' ? (
+            <SummaryTab
+              confirmingKey={confirmingKey}
+              data={data}
+              monthKey={month.key}
+              onConfirm={setPendingConfirm}
+              onSelectTrend={(point) => setMonthStart(point.start)}
+            />
+          ) : tab === 'history' ? (
+            <HistoryTab entries={data.entries} paymentMethods={data.paymentMethods} />
+          ) : tab === 'budget' ? (
+            <BudgetTab data={data} onFeedback={showToast} />
           ) : (
-            <ActivityIndicator color={colors.accent} style={styles.message} />
-          )
-        ) : tab === 'summary' ? (
-          <SummaryTab
-            confirmingKey={confirmingKey}
-            data={data}
-            monthKey={month.key}
-            onConfirm={setPendingConfirm}
-            onSelectTrend={(point) => setMonthStart(point.start)}
-          />
-        ) : tab === 'history' ? (
-          <HistoryTab entries={data.entries} paymentMethods={data.paymentMethods} />
-        ) : tab === 'budget' ? (
-          <BudgetTab data={data} onFeedback={showToast} />
-        ) : (
-          <CardsTab data={data} onFeedback={showToast} />
-        )}
+            <CardsTab data={data} onFeedback={showToast} />
+          )}
+        </SwipeView>
       </ScrollView>
 
       <Toast message={toast} onHide={hideToast} />

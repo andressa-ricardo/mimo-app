@@ -17,6 +17,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { MoreModulesMenu } from '@/components/navigation/more-modules-menu';
 import { AppText } from '@/components/ui/app-text';
 import { FilterChip } from '@/components/ui/filter-chip';
+import { SwipeView } from '@/components/ui/swipe-view';
 import { Toast, type ToastMessage } from '@/components/ui/toast';
 import { WishlistQuickSheet } from '@/features/quick-actions/wishlist-quick-sheet';
 import { useWishlistItems } from '@/features/wishlist/use-wishlist';
@@ -28,6 +29,8 @@ import type { WishlistItem } from '@/types/wishlist';
 import { formatCurrency } from '@/utils/format';
 
 type StatusFilter = 'desired' | 'purchased' | 'all';
+
+const statusOrder: StatusFilter[] = ['desired', 'purchased', 'all'];
 
 const CONTENT_MAX_WIDTH = 560;
 const GRID_PADDING = 16;
@@ -125,6 +128,14 @@ export function WishlistScreen() {
   const [toast, setToast] = useState<ToastMessage | null>(null);
 
   const closeAdd = useCallback(() => setAddOpen(false), []);
+  const showNextFilter = useCallback(
+    () => setStatusFilter((current) => statusOrder[Math.min(statusOrder.indexOf(current) + 1, statusOrder.length - 1)]),
+    [],
+  );
+  const showPreviousFilter = useCallback(
+    () => setStatusFilter((current) => statusOrder[Math.max(statusOrder.indexOf(current) - 1, 0)]),
+    [],
+  );
   const hideToast = useCallback(() => setToast(null), []);
   const handleSaved = useCallback((text: string) => {
     setAddOpen(false);
@@ -239,6 +250,7 @@ export function WishlistScreen() {
           </ScrollView>
         ) : null}
 
+        <SwipeView onSwipeLeft={showNextFilter} onSwipeRight={showPreviousFilter} style={styles.swipeArea}>
         {state.status === 'loading' ? (
           <ActivityIndicator color={colors.accent} style={styles.loading} />
         ) : state.status === 'error' ? (
@@ -258,6 +270,7 @@ export function WishlistScreen() {
             showsVerticalScrollIndicator={false}
           />
         )}
+        </SwipeView>
       </View>
 
       <Toast message={toast} onHide={hideToast} />
@@ -390,6 +403,9 @@ const styles = StyleSheet.create({
     opacity: 0.7,
   },
   screen: {
+    flex: 1,
+  },
+  swipeArea: {
     flex: 1,
   },
   search: {
