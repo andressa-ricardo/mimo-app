@@ -4,17 +4,16 @@
     "slug": "mimo-app",
     "version": "1.0.0",
     "orientation": "portrait",
-    "icon": "./assets/images/icon.png",
+    "icon": "./assets/images/app-icon.png",
     "scheme": "mimo",
     "userInterfaceStyle": "automatic",
     "ios": {
-      "icon": "./assets/expo.icon"
+      "icon": "./assets/images/app-icon.png"
     },
     "android": {
       "adaptiveIcon": {
-        "backgroundColor": "#FAF9F7",
+        "backgroundColor": "#F7ECFA",
         "foregroundImage": "./assets/images/android-icon-foreground.png",
-        "backgroundImage": "./assets/images/android-icon-background.png",
         "monochromeImage": "./assets/images/android-icon-monochrome.png"
       },
       "predictiveBackGestureEnabled": true,
@@ -33,8 +32,12 @@
         {
           "backgroundColor": "#FAF9F7",
           "dark": {
-            "backgroundColor": "#17161B"
-          }
+            "backgroundColor": "#17161B",
+            "image": "./assets/images/splash-icon.png"
+          },
+          "image": "./assets/images/splash-icon.png",
+          "imageWidth": 160,
+          "resizeMode": "contain"
         }
       ],
       "expo-sqlite",

@@ -25,10 +25,13 @@ import {
   type QuickSheetProps,
 } from '@/features/quick-actions/use-form-options';
 import { createTask, editTask, type ReminderOutcome } from '@/features/tasks/create-task';
-import { getNotificationPreferences } from '@/database/repositories/preferences-repository';
+import {
+  getNotificationPreferences,
+  saveNotificationPreferences,
+} from '@/database/repositories/preferences-repository';
 import { ensureReminderPermission, getExactAlarmStatus } from '@/services/notifications/task-reminders';
 import type { Priority, TaskItem } from '@/types/tasks';
-import { combineDateAndTime, formatDateKey, toDateKey, type DateKey, type TimeKey } from '@/utils/date';
+import { combineDateAndTime, formatDateKey, nextFullHour, toDateKey, type DateKey, type TimeKey } from '@/utils/date';
 
 const successMessages: Record<ReminderOutcome, string> = {
   none: 'Tarefa salva.',
@@ -38,8 +41,8 @@ const successMessages: Record<ReminderOutcome, string> = {
   disabled: 'Tarefa salva. Lembretes de tarefas estão desativados em Configurações.',
 };
 
-/** Whether "Lembretes de tarefas" is on in Configurações (assumed on until loaded). */
-function useTaskRemindersSetting(): boolean {
+/** "Lembretes de tarefas" in Configurações (assumed on until loaded), plus a way to switch it on. */
+function useTaskRemindersSetting(): [boolean, () => Promise<void>] {
   const [allowed, setAllowed] = useState(true);
   useEffect(() => {
     let active = true;
@@ -52,8 +55,16 @@ function useTaskRemindersSetting(): boolean {
       active = false;
     };
   }, []);
-  return allowed;
+
+  const enable = async () => {
+    const preferences = await getNotificationPreferences();
+    if (!preferences.taskReminders) await saveNotificationPreferences({ ...preferences, taskReminders: true });
+    setAllowed(true);
+  };
+  return [allowed, enable];
 }
+
+const dayLabel = (dueDate: DateKey, today: DateKey) => (dueDate === today ? 'hoje' : formatDateKey(dueDate));
 
 /** Says exactly when the reminder fires, so a wrong AM/PM pick is obvious. */
 async function describeScheduledReminder(
@@ -96,6 +107,8 @@ function TaskForm({ onSaved, task }: TaskFormProps) {
   const [description, setDescription] = useState(initial.description);
   const [categoryId, setCategoryId] = useState<string | null>(initial.categoryId);
   const [reminder, setReminder] = useState(initial.reminder);
+  // Once the user flips the switch, picking a time no longer changes it.
+  const [reminderTouched, setReminderTouched] = useState(task !== null);
   const [reminderNotice, setReminderNotice] = useState<string | null>(null);
   const [titleError, setTitleError] = useState<string | null>(null);
   const [formError, setFormError] = useState<string | null>(null);
@@ -103,11 +116,21 @@ function TaskForm({ onSaved, task }: TaskFormProps) {
   const savingRef = useRef(false);
   const { categories, addCategory } = useCategories('task');
   const now = useNow(30_000);
-  const remindersAllowed = useTaskRemindersSetting();
+  const [remindersAllowed, enableReminderSetting] = useTaskRemindersSetting();
 
   const reminderDate = dueTime ? combineDateAndTime(dueDate, dueTime) : null;
-  const canRemind = remindersAllowed && reminderDate !== null && reminderDate.getTime() > now;
-  const reminderActive = reminder && canRemind;
+  const timeIsFuture = reminderDate !== null && reminderDate.getTime() > now;
+  const reminderActive = reminder && remindersAllowed && timeIsFuture;
+
+  const reminderDescription = !reminder
+    ? remindersAllowed
+      ? 'Avisa no horário da tarefa'
+      : 'Lembretes de tarefas estão desligados — toque para ligar'
+    : !dueTime
+      ? 'Escolha um horário para o lembrete'
+      : !timeIsFuture
+        ? 'Esse horário já passou — escolha um horário futuro'
+        : `Notificação ${dayLabel(dueDate, today)} às ${dueTime}`;
 
   useBottomSheetDirty(
     title.trim() !== initial.title ||
@@ -119,21 +142,40 @@ function TaskForm({ onSaved, task }: TaskFormProps) {
       reminder !== initial.reminder,
   );
 
-  const toggleReminder = async (enabled: boolean) => {
+  /** Turns the reminder on: asks permission, switches the setting on and fills a time if missing. */
+  const enableReminder = async (): Promise<boolean> => {
     setReminderNotice(null);
+    const permission = await ensureReminderPermission();
+    if (permission !== 'granted') {
+      setReminder(false);
+      setReminderNotice(
+        permission === 'denied'
+          ? 'As notificações estão bloqueadas. Ative-as nas configurações do sistema para usar lembretes.'
+          : 'Lembretes não estão disponíveis neste dispositivo.',
+      );
+      return false;
+    }
+    if (!remindersAllowed) await enableReminderSetting();
+    setReminder(true);
+    return true;
+  };
+
+  const toggleReminder = async (enabled: boolean) => {
+    setReminderTouched(true);
     if (!enabled) {
       setReminder(false);
+      setReminderNotice(null);
       return;
     }
-    setReminder(true);
-    const permission = await ensureReminderPermission();
-    if (permission === 'granted') return;
-    setReminder(false);
-    setReminderNotice(
-      permission === 'denied'
-        ? 'Notificações desativadas. Ative-as nas configurações do sistema para usar lembretes.'
-        : 'Lembretes não estão disponíveis neste dispositivo.',
-    );
+    if (await enableReminder()) {
+      if (!dueTime) setDueTime(nextFullHour(new Date()));
+    }
+  };
+
+  // Choosing a time turns the reminder on, unless the user already decided.
+  const changeDueTime = (next: TimeKey | null) => {
+    setDueTime(next);
+    if (next && !dueTime && !reminderTouched && remindersAllowed) void enableReminder();
   };
 
   const submit = async () => {
@@ -141,6 +183,15 @@ function TaskForm({ onSaved, task }: TaskFormProps) {
     const normalizedTitle = title.trim();
     if (!normalizedTitle) {
       setTitleError('Informe o que precisa ser feito.');
+      return;
+    }
+    // Never save silently without the reminder the user turned on.
+    if (reminder && remindersAllowed && !reminderActive) {
+      setReminderNotice(
+        dueTime
+          ? 'O horário do lembrete já passou. Escolha um horário futuro ou desligue o lembrete.'
+          : 'Escolha um horário para o lembrete ou desligue-o.',
+      );
       return;
     }
 
@@ -190,7 +241,7 @@ function TaskForm({ onSaved, task }: TaskFormProps) {
 
         <View style={styles.row}>
           <DateField containerStyle={styles.half} label="Data" onChange={setDueDate} value={dueDate} />
-          <TimeField containerStyle={styles.half} label="Hora (opcional)" onChange={setDueTime} value={dueTime} />
+          <TimeField containerStyle={styles.half} label="Hora (opcional)" onChange={changeDueTime} value={dueTime} />
         </View>
 
         <View style={styles.group}>
@@ -237,18 +288,12 @@ function TaskForm({ onSaved, task }: TaskFormProps) {
 
         <View style={styles.group}>
           <ToggleGroup>
+            {/* Always tappable: turning it on fills a time and switches the setting on if needed. */}
             <ToggleField
-              description={
-                !remindersAllowed
-                  ? 'Desativado em Configurações'
-                  : canRemind
-                    ? 'Notificação no horário definido'
-                    : 'Defina um horário futuro para ativar'
-              }
-              disabled={!canRemind}
+              description={reminderDescription}
               label="Lembrete local"
               onChange={(enabled) => void toggleReminder(enabled)}
-              value={reminderActive}
+              value={reminder && remindersAllowed}
             />
           </ToggleGroup>
           {reminderNotice ? (
