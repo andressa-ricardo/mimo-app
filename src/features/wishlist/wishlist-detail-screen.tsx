@@ -24,7 +24,7 @@ import type { WishlistItem } from '@/types/wishlist';
 import { formatDateKey, toDateKey } from '@/utils/date';
 import { formatCurrency } from '@/utils/format';
 
-type Dialog = 'register-expense' | 'delete' | null;
+type Dialog = 'purchase' | 'register-expense' | 'delete' | null;
 
 function formatTimestamp(timestamp: number): string {
   return formatDateKey(toDateKey(new Date(timestamp)));
@@ -132,12 +132,13 @@ export function WishlistDetailScreen() {
 
   const purchased = item.purchasedAt !== null;
 
+  // Only runs after the user confirms in the dialog.
   const markPurchased = () =>
     runExclusive(async () => {
       await setWishlistPurchased(item.id, true);
+      setDialog(null);
       notifyDataChanged('wishlist');
-      if (canRegisterExpense(item)) setDialog('register-expense');
-      else showToast('Marcado como comprado.');
+      showToast('Marcado como comprado.');
     }, 'Não foi possível atualizar o produto.');
 
   const markDesired = () =>
@@ -149,11 +150,18 @@ export function WishlistDetailScreen() {
 
   const registerExpense = () =>
     runExclusive(async () => {
+      // Marks the item as purchased and creates the expense in one SQL transaction.
       const outcome = await registerPurchaseExpense(item.id);
       setDialog(null);
       notifyDataChanged('wishlist');
       notifyDataChanged('finance');
-      showToast(outcome === 'created' ? 'Gasto registrado em Finanças.' : 'Esse gasto já estava registrado.');
+      showToast(
+        outcome === 'already-registered'
+          ? 'Esse gasto já estava registrado.'
+          : purchased
+            ? 'Gasto registrado em Finanças.'
+            : 'Marcado como comprado e gasto registrado em Finanças.',
+      );
     }, 'Não foi possível registrar o gasto.');
 
   const deleteItem = () =>
@@ -279,20 +287,45 @@ export function WishlistDetailScreen() {
             icon="bag-handle-outline"
             label="Marcar como comprado"
             loading={busy}
-            onPress={() => void markPurchased()}
+            onPress={() => setDialog('purchase')}
           />
         )}
       </ScrollView>
 
       <Toast message={toast} onHide={hideToast} />
 
+      {canRegisterExpense(item) && item.priceCents !== null ? (
+        <ConfirmDialog
+          cancelLabel="Cancelar"
+          confirmLabel="Marcar e registrar gasto"
+          loading={busy}
+          message={`"${item.name}" vai para Comprados. Quer lançar ${formatCurrency(item.priceCents)} em Finanças também?`}
+          onCancel={() => setDialog(null)}
+          onConfirm={() => void registerExpense()}
+          onSecondary={() => void markPurchased()}
+          secondaryLabel="Só marcar como comprado"
+          title="Marcar como comprado?"
+          visible={dialog === 'purchase'}
+        />
+      ) : (
+        <ConfirmDialog
+          cancelLabel="Cancelar"
+          confirmLabel="Marcar como comprado"
+          loading={busy}
+          message={`"${item.name}" vai para Comprados.`}
+          onCancel={() => setDialog(null)}
+          onConfirm={() => void markPurchased()}
+          title="Marcar como comprado?"
+          visible={dialog === 'purchase'}
+        />
+      )}
       <ConfirmDialog
         cancelLabel="Agora não"
         confirmLabel="Registrar gasto"
         loading={busy}
-        message={`Marcamos "${item.name}" como comprado. Quer lançar ${
+        message={`Quer lançar ${
           item.priceCents === null ? 'o valor' : formatCurrency(item.priceCents)
-        } em Finanças?`}
+        } de "${item.name}" em Finanças?`}
         onCancel={() => setDialog(null)}
         onConfirm={() => void registerExpense()}
         title="Registrar como despesa?"
