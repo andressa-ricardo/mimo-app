@@ -85,18 +85,23 @@ function HistoryRow({ entry, onPress }: { entry: MonthEntry; onPress: () => void
 
 type HistoryTabProps = {
   entries: MonthEntry[];
+  /** Pre-applied filters, e.g. when opened from a category in the Resumo. */
+  initialFocus?: { categoryId: string | null; type: 'expense' | 'income' } | null;
   monthKey: string;
   onEdit: (entry: MonthEntry) => void;
   onFeedback: (message: string) => void;
   paymentMethods: PaymentMethod[];
 };
 
-export function HistoryTab({ entries, monthKey, onEdit, onFeedback, paymentMethods }: HistoryTabProps) {
+export function HistoryTab({ entries, initialFocus = null, monthKey, onEdit, onFeedback, paymentMethods }: HistoryTabProps) {
   const { colors } = useAppTheme();
   const [query, setQuery] = useState('');
   const [exporting, setExporting] = useState(false);
-  const [typeFilter, setTypeFilter] = useState<TypeFilter>('all');
-  const [filters, setFilters] = useState<HistoryFilters>(emptyHistoryFilters);
+  const [typeFilter, setTypeFilter] = useState<TypeFilter>(initialFocus?.type ?? 'all');
+  const [filters, setFilters] = useState<HistoryFilters>({
+    ...emptyHistoryFilters,
+    categoryId: initialFocus?.categoryId ?? null,
+  });
   const [filtersOpen, setFiltersOpen] = useState(false);
   const activeFilterCount = (filters.categoryId ? 1 : 0) + (filters.paymentMethodId ? 1 : 0);
 

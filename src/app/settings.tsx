@@ -1,8 +1,11 @@
+import Ionicons from '@expo/vector-icons/Ionicons';
 import Constants from 'expo-constants';
+import * as Linking from 'expo-linking';
 import { useCallback, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, TextInput, View } from 'react-native';
 
 import { AppText } from '@/components/ui/app-text';
+import { DEVELOPER_LINKEDIN_URL, DEVELOPER_NAME } from '@/constants/app-info';
 import { ScreenHeader } from '@/components/ui/screen-header';
 import { Toast, type ToastMessage } from '@/components/ui/toast';
 import {
@@ -133,9 +136,31 @@ export default function SettingsScreen() {
         <NotificationSettings onFeedback={showToast} />
         <DataSettings onFeedback={showToast} onRestored={handleRestored} />
 
-        <AppText color="secondary" style={styles.footer} variant="caption">
-          Mimo · versão {appVersion} · dados salvos apenas neste dispositivo
-        </AppText>
+        <View style={styles.footer}>
+          <AppText color="secondary" style={styles.center} variant="caption">
+            Mimo · versão {appVersion} · dados salvos apenas neste dispositivo
+          </AppText>
+          <AppText color="secondary" style={styles.center} variant="caption">
+            Desenvolvido por{' '}
+            <AppText style={styles.author} variant="caption">
+              {DEVELOPER_NAME}
+            </AppText>
+          </AppText>
+          <Pressable
+            accessibilityHint="Abre o perfil no LinkedIn"
+            accessibilityLabel={`LinkedIn de ${DEVELOPER_NAME}`}
+            accessibilityRole="link"
+            hitSlop={8}
+            onPress={() => {
+              Linking.openURL(DEVELOPER_LINKEDIN_URL).catch(() => showToast('Não foi possível abrir o LinkedIn.'));
+            }}
+            style={({ pressed }) => [styles.linkedin, pressed && styles.pressed]}>
+            <Ionicons color={colors.accent} name="logo-linkedin" size={15} />
+            <AppText color="accent" variant="label">
+              LinkedIn
+            </AppText>
+          </Pressable>
+        </View>
       </ScrollView>
       <Toast message={toast} onHide={hideToast} />
     </View>
@@ -162,9 +187,23 @@ const styles = StyleSheet.create({
   feedback: {
     textAlign: 'center',
   },
-  footer: {
-    marginTop: 8,
+  author: {
+    fontFamily: 'Inter_600SemiBold',
+  },
+  center: {
     textAlign: 'center',
+  },
+  footer: {
+    alignItems: 'center',
+    gap: 4,
+    marginTop: 8,
+  },
+  linkedin: {
+    alignItems: 'center',
+    flexDirection: 'row',
+    gap: 5,
+    marginTop: 2,
+    paddingVertical: 4,
   },
   helper: {
     marginBottom: 14,

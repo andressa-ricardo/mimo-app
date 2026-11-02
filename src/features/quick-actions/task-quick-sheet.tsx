@@ -235,7 +235,6 @@ function TaskForm({ onSaved, task }: TaskFormProps) {
           }}
           placeholder="O que precisa ser feito?"
           returnKeyType="done"
-          large
           value={title}
         />
 

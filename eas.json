@@ -1,7 +1,7 @@
 {
   "cli": {
     "version": ">= 16.0.0",
-    "appVersionSource": "remote"
+    "appVersionSource": "local"
   },
   "build": {
     "development": {
@@ -13,13 +13,13 @@
     },
     "preview": {
       "distribution": "internal",
-      "autoIncrement": true,
       "android": {
         "buildType": "apk"
-      }
+      },
+      "credentialsSource": "local"
     },
     "production": {
-      "autoIncrement": true
+      "credentialsSource": "local"
     }
   },
   "submit": {

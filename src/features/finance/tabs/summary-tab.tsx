@@ -24,6 +24,10 @@ type SummaryTabProps = {
   data: FinanceMonthData;
   monthKey: string;
   onConfirm: (entry: MonthEntry) => void;
+  /** Opens a planned/recurring entry for editing. */
+  onEditEntry: (entry: MonthEntry) => void;
+  /** Opens the history filtered by a category (rows sum many transactions). */
+  onOpenCategory: (categoryId: string | null, type: 'expense' | 'income') => void;
   onSelectTrend: (point: TrendPoint) => void;
 };
 
@@ -45,7 +49,15 @@ function TotalTile({ amountCents, kind }: { amountCents: number; kind: 'income' 
   );
 }
 
-export function SummaryTab({ confirmingKey, data, monthKey, onConfirm, onSelectTrend }: SummaryTabProps) {
+export function SummaryTab({
+  confirmingKey,
+  data,
+  monthKey,
+  onConfirm,
+  onEditEntry,
+  onOpenCategory,
+  onSelectTrend,
+}: SummaryTabProps) {
   const { colors, isDark } = useAppTheme();
   const { summary } = data;
   const balanceColor =
@@ -119,7 +131,13 @@ export function SummaryTab({ confirmingKey, data, monthKey, onConfirm, onSelectT
         ) : (
           <Card style={styles.listCard}>
             {summary.byCategory.map((category) => (
-              <View key={category.categoryId ?? 'none'} style={styles.categoryRow}>
+              <Pressable
+                accessibilityHint="Mostra as transações desta categoria no Histórico"
+                accessibilityLabel={`${category.name}, ${formatCurrency(category.amountCents)}`}
+                accessibilityRole="button"
+                key={category.categoryId ?? 'none'}
+                onPress={() => onOpenCategory(category.categoryId, 'expense')}
+                style={({ pressed }) => [styles.categoryRow, pressed && styles.dimmed]}>
                 <View style={styles.categoryHeading}>
                   <View
                     style={[
@@ -137,7 +155,7 @@ export function SummaryTab({ confirmingKey, data, monthKey, onConfirm, onSelectT
                   <AppText variant="label">{formatCurrency(category.amountCents)}</AppText>
                 </View>
                 <ProgressBar color={colors.accent} fraction={category.amountCents / topCategory} />
-              </View>
+              </Pressable>
             ))}
           </Card>
         )}
@@ -148,7 +166,13 @@ export function SummaryTab({ confirmingKey, data, monthKey, onConfirm, onSelectT
           <SectionHeader title="Receitas por categoria" />
           <Card style={styles.listCard}>
             {summary.byIncomeCategory.map((category) => (
-              <View key={category.categoryId ?? 'none'} style={styles.categoryRow}>
+              <Pressable
+                accessibilityHint="Mostra as transações desta categoria no Histórico"
+                accessibilityLabel={`${category.name}, ${formatCurrency(category.amountCents)}`}
+                accessibilityRole="button"
+                key={category.categoryId ?? 'none'}
+                onPress={() => onOpenCategory(category.categoryId, 'income')}
+                style={({ pressed }) => [styles.categoryRow, pressed && styles.dimmed]}>
                 <View style={styles.categoryHeading}>
                   <View
                     style={[
@@ -167,7 +191,7 @@ export function SummaryTab({ confirmingKey, data, monthKey, onConfirm, onSelectT
                 </View>
                 {/* One hue (income) for ranked bars; the dot carries the category identity. */}
                 <ProgressBar color={colors.income} fraction={category.amountCents / topIncomeCategory} />
-              </View>
+              </Pressable>
             ))}
           </Card>
         </View>
@@ -182,11 +206,16 @@ export function SummaryTab({ confirmingKey, data, monthKey, onConfirm, onSelectT
             {summary.upcoming.map((entry, index) => {
               const planned = entry.status === 'planned';
               return (
-                <View
+                <Pressable
+                  accessibilityHint="Editar transação"
+                  accessibilityLabel={`${entry.description}, ${formatShortDate(entry.dueDate)}`}
+                  accessibilityRole="button"
                   key={entry.key}
-                  style={[
+                  onPress={() => onEditEntry(entry)}
+                  style={({ pressed }) => [
                     styles.upcomingRow,
                     index > 0 && { borderTopColor: colors.border, borderTopWidth: StyleSheet.hairlineWidth },
+                    pressed && { backgroundColor: colors.muted },
                   ]}>
                   <View style={[styles.upcomingIcon, { backgroundColor: colors.accentSoft }]}>
                     <Ionicons color={colors.accent} name={planned ? 'time-outline' : 'repeat-outline'} size={17} />
@@ -221,7 +250,7 @@ export function SummaryTab({ confirmingKey, data, monthKey, onConfirm, onSelectT
                   ) : (
                     <Ionicons accessibilityLabel="Confirmado" color={colors.success} name="checkmark-circle" size={18} />
                   )}
-                </View>
+                </Pressable>
               );
             })}
           </Card>

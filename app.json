@@ -2,7 +2,7 @@
   "expo": {
     "name": "mimo.",
     "slug": "mimo-app",
-    "version": "1.0.0",
+    "version": "1.0.1",
     "orientation": "portrait",
     "icon": "./assets/images/app-icon.png",
     "scheme": "mimo",
@@ -21,7 +21,8 @@
       "predictiveBackGestureEnabled": true,
       "permissions": [
         "android.permission.SCHEDULE_EXACT_ALARM"
-      ]
+      ],
+      "versionCode": 2
     },
     "web": {
       "output": "single",
@@ -61,7 +62,13 @@
           "microphonePermission": false
         }
       ],
-      "expo-sharing"
+      "expo-sharing",
+      [
+        "./plugins/with-gradle-project-name",
+        {
+          "name": "mimo"
+        }
+      ]
     ],
     "experiments": {
       "typedRoutes": true,

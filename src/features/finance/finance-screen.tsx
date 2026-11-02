@@ -45,6 +45,7 @@ export function FinanceScreen() {
   const [toast, setToast] = useState<ToastMessage | null>(null);
   const [newTransaction, setNewTransaction] = useState<TransactionType | null>(null);
   const [transactionEdit, setTransactionEdit] = useState<TransactionEdit | null>(null);
+  const [historyFocus, setHistoryFocus] = useState<{ categoryId: string | null; type: 'expense' | 'income' } | null>(null);
   const month = monthRangeOf(parseDateKey(monthStart));
   const state = useFinanceMonth(month);
 
@@ -153,7 +154,15 @@ export function FinanceScreen() {
           ))}
         </View>
 
-        <SegmentedControl accessibilityLabel="Seções de Finanças" onChange={setTab} options={tabOptions} value={tab} />
+        <SegmentedControl
+          accessibilityLabel="Seções de Finanças"
+          onChange={(next) => {
+            setHistoryFocus(null);
+            setTab(next);
+          }}
+          options={tabOptions}
+          value={tab}
+        />
 
         {/* Swiping the content moves to the next/previous month. */}
         <SwipeView onSwipeLeft={showNextMonth} onSwipeRight={showPreviousMonth}>
@@ -171,11 +180,17 @@ export function FinanceScreen() {
               data={data}
               monthKey={month.key}
               onConfirm={setPendingConfirm}
+              onEditEntry={(entry) => void openTransaction(entry)}
+              onOpenCategory={(categoryId, type) => {
+                setHistoryFocus({ categoryId, type });
+                setTab('history');
+              }}
               onSelectTrend={(point) => setMonthStart(point.start)}
             />
           ) : tab === 'history' ? (
             <HistoryTab
               entries={data.entries}
+              initialFocus={historyFocus}
               monthKey={month.key}
               onEdit={(entry) => void openTransaction(entry)}
               onFeedback={showToast}

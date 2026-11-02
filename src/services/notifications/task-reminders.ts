@@ -150,27 +150,6 @@ export async function requestExactAlarms(): Promise<"granted" | "denied" | "unsu
   }
 }
 
-const TEST_DELAY_MS = 5000;
-
-/** Schedules a notification a few seconds ahead to check the whole pipeline. */
-export async function sendTestNotification(): Promise<ReminderPermission> {
-  const permission = await ensureReminderPermission();
-  if (permission !== "granted") return permission;
-  await scheduleNotificationAsync({
-    content: {
-      title: "Notificação de teste",
-      body: "Tudo certo! Os lembretes do Mimo estão funcionando.",
-      data: { kind: "test" },
-    },
-    trigger: {
-      type: SchedulableTriggerInputTypes.DATE,
-      date: Date.now() + TEST_DELAY_MS,
-      channelId: channelFor(TASK_CHANNEL_ID),
-    },
-  });
-  return "granted";
-}
-
 export async function cancelTaskReminder(
   notificationId: string,
 ): Promise<void> {

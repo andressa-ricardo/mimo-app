@@ -16,7 +16,6 @@ import {
   ensureReminderPermission,
   getExactAlarmStatus,
   requestExactAlarms,
-  sendTestNotification,
   type ExactAlarmStatus,
 } from '@/services/notifications/task-reminders';
 import type { NotificationPreferences } from '@/types/preferences';
@@ -58,21 +57,6 @@ export function NotificationSettings({ onFeedback }: { onFeedback: (message: str
     else if (result === 'unsupported') onFeedback('Não foi possível abrir essa configuração neste aparelho.');
   };
 
-  const sendTest = async () => {
-    try {
-      const permission = await sendTestNotification();
-      onFeedback(
-        permission === 'granted'
-          ? 'A notificação de teste chega em alguns segundos.'
-          : permission === 'denied'
-            ? 'As notificações estão bloqueadas nas configurações do sistema.'
-            : 'Notificações não estão disponíveis neste dispositivo.',
-      );
-    } catch (error: unknown) {
-      console.error('Falha ao enviar notificação de teste.', error);
-      onFeedback('Não foi possível enviar a notificação de teste.');
-    }
-  };
 
   const toggle = async (key: PreferenceKey, enabled: boolean) => {
     if (!preferences || busyKey) return;
@@ -137,11 +121,6 @@ export function NotificationSettings({ onFeedback }: { onFeedback: (message: str
           </Pressable>
         </View>
       ) : null}
-      <Pressable accessibilityRole="button" hitSlop={8} onPress={() => void sendTest()} style={styles.testLink}>
-        <AppText color="accent" variant="label">
-          Enviar notificação de teste
-        </AppText>
-      </Pressable>
     </View>
   );
 }
@@ -152,8 +131,5 @@ const styles = StyleSheet.create({
   },
   section: {
     gap: 8,
-  },
-  testLink: {
-    alignSelf: 'flex-start',
   },
 });

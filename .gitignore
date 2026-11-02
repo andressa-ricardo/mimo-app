@@ -41,3 +41,7 @@ example
 # generated native folders
 /ios
 /android
+
+# signing credentials (keep a private backup!)
+credentials.json
+/credentials
