@@ -6,9 +6,10 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { SegmentedControl } from '@/components/forms/segmented-control';
 import { MoreModulesMenu } from '@/components/navigation/more-modules-menu';
 import { AppText } from '@/components/ui/app-text';
+import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { Toast, type ToastMessage } from '@/components/ui/toast';
 import { confirmEntry } from '@/database/repositories/finance-repository';
-import { capitalize } from '@/features/finance/components/finance-ui';
+import { capitalize, formatShortDate } from '@/features/finance/components/finance-ui';
 import { monthRangeOf } from '@/features/finance/month-data';
 import { BudgetTab } from '@/features/finance/tabs/budget-tab';
 import { CardsTab } from '@/features/finance/tabs/cards-tab';
@@ -19,6 +20,7 @@ import { notifyDataChanged } from '@/services/events/data-events';
 import { useAppTheme } from '@/theme/theme-provider';
 import type { MonthEntry } from '@/types/finance';
 import { addMonthsToDateKey, parseDateKey } from '@/utils/date';
+import { formatCurrency } from '@/utils/format';
 
 type FinanceTab = 'summary' | 'history' | 'budget' | 'cards';
 
@@ -36,6 +38,7 @@ export function FinanceScreen() {
   const [monthStart, setMonthStart] = useState(() => monthRangeOf(new Date()).start);
   const [tab, setTab] = useState<FinanceTab>('summary');
   const [confirmingKey, setConfirmingKey] = useState<string | null>(null);
+  const [pendingConfirm, setPendingConfirm] = useState<MonthEntry | null>(null);
   const confirmingRef = useRef(false);
   const [toast, setToast] = useState<ToastMessage | null>(null);
   const month = monthRangeOf(parseDateKey(monthStart));
@@ -52,10 +55,12 @@ export function FinanceScreen() {
     setConfirmingKey(entry.key);
     try {
       await confirmEntry(entry);
+      setPendingConfirm(null);
       notifyDataChanged('finance');
       showToast(`${entry.type === 'income' ? 'Receita' : 'Despesa'} confirmada.`);
     } catch (error: unknown) {
       console.error('Falha ao confirmar lançamento.', error);
+      setPendingConfirm(null);
       showToast('Não foi possível confirmar. Tente novamente.');
     } finally {
       confirmingRef.current = false;
@@ -112,7 +117,7 @@ export function FinanceScreen() {
             confirmingKey={confirmingKey}
             data={data}
             monthKey={month.key}
-            onConfirm={(entry) => void confirm(entry)}
+            onConfirm={setPendingConfirm}
             onSelectTrend={(point) => setMonthStart(point.start)}
           />
         ) : tab === 'history' ? (
@@ -125,6 +130,28 @@ export function FinanceScreen() {
       </ScrollView>
 
       <Toast message={toast} onHide={hideToast} />
+
+      {/* Nothing is saved until the user confirms; cancelling keeps the button. */}
+      <ConfirmDialog
+        cancelLabel="Agora não"
+        confirmLabel="Confirmar"
+        loading={confirmingKey !== null}
+        message={
+          pendingConfirm
+            ? `${pendingConfirm.description} · ${formatCurrency(pendingConfirm.amountCents)} · ${formatShortDate(
+                pendingConfirm.dueDate,
+              )}. Ao confirmar, o valor passa a contar ${
+                pendingConfirm.type === 'income' ? 'nas receitas' : 'nas despesas'
+              } do mês.`
+            : ''
+        }
+        onCancel={() => setPendingConfirm(null)}
+        onConfirm={() => {
+          if (pendingConfirm) void confirm(pendingConfirm);
+        }}
+        title={pendingConfirm?.type === 'income' ? 'Confirmar recebimento?' : 'Confirmar pagamento?'}
+        visible={pendingConfirm !== null}
+      />
     </SafeAreaView>
   );
 }
