@@ -8,7 +8,8 @@ import {
   exportBackup,
   getStorageSummary,
   pickBackup,
-  restoreBackup,
+  mergeBackup,
+  type MergeResult,
   summarizeBackup,
   type StorageSummary,
 } from '@/services/backup/backup-service';
@@ -37,6 +38,19 @@ function describeStorage(summary: StorageSummary): string {
     plural(summary.tasks, 'tarefa', 'tarefas'),
     plural(summary.wishlistItems, 'desejo', 'desejos'),
   ].join(' · ');
+}
+
+function describeMerge(result: MergeResult): string {
+  const parts = [
+    result.tasks > 0 ? plural(result.tasks, 'tarefa', 'tarefas') : null,
+    result.transactions > 0 ? plural(result.transactions, 'transação', 'transações') : null,
+    result.wishlistItems > 0 ? plural(result.wishlistItems, 'desejo', 'desejos') : null,
+    result.goals > 0 ? plural(result.goals, 'meta', 'metas') : null,
+    result.appointments > 0 ? plural(result.appointments, 'compromisso', 'compromissos') : null,
+  ].filter(Boolean);
+  return parts.length > 0
+    ? `Backup importado. Adicionados: ${parts.join(', ')}.`
+    : 'Backup importado. Tudo o que havia nele já estava neste aparelho.';
 }
 
 function OutlineButton({ label, loading, onPress }: { label: string; loading: boolean; onPress: () => void }) {
@@ -119,14 +133,14 @@ export function DataSettings({ onFeedback, onRestored }: DataSettingsProps) {
     if (!pendingBackup || busy) return;
     setBusy('restore');
     try {
-      await restoreBackup(pendingBackup);
+      const result = await mergeBackup(pendingBackup);
       setPendingBackup(null);
       await onRestored();
       loadSummary();
-      onFeedback('Backup restaurado.');
+      onFeedback(describeMerge(result));
     } catch (error: unknown) {
       setPendingBackup(null);
-      showError(error, 'Não foi possível restaurar o backup. Seus dados atuais foram mantidos.');
+      showError(error, 'Não foi possível importar o backup. Seus dados atuais foram mantidos.');
     } finally {
       setBusy(null);
     }
@@ -150,11 +164,11 @@ export function DataSettings({ onFeedback, onRestored }: DataSettingsProps) {
         </AppText>
       </View>
       <OutlineButton label="Exportar backup" loading={busy === 'export'} onPress={() => void handleExport()} />
-      <OutlineButton label="Restaurar backup" loading={busy === 'pick'} onPress={() => void handlePick()} />
+      <OutlineButton label="Importar backup" loading={busy === 'pick'} onPress={() => void handlePick()} />
 
       <ConfirmDialog
         cancelLabel="Cancelar"
-        confirmLabel="Restaurar"
+        confirmLabel="Importar"
         loading={busy === 'restore'}
         message={
           backupSummary
@@ -162,13 +176,12 @@ export function DataSettings({ onFeedback, onRestored }: DataSettingsProps) {
                 backupSummary.tasks,
                 'tarefa',
                 'tarefas',
-              )} · ${plural(backupSummary.wishlistItems, 'desejo', 'desejos')}.\n\nOs dados atuais deste aparelho serão substituídos. Essa ação não pode ser desfeita.`
+              )} · ${plural(backupSummary.wishlistItems, 'desejo', 'desejos')}.\n\nOs itens do backup serão juntados aos que você já tem. Nada será apagado, e o que já existe no aparelho não será duplicado.`
             : ''
         }
         onCancel={() => setPendingBackup(null)}
         onConfirm={() => void handleRestore()}
-        title="Restaurar backup?"
-        tone="destructive"
+        title="Importar backup?"
         visible={pendingBackup !== null}
       />
     </View>

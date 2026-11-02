@@ -12,7 +12,6 @@ import {
   type BackupTable,
 } from '@/services/backup/backup-types';
 import { resolveStoredImage } from '@/services/images/image-storage';
-import { imagesDirectory } from '@/services/storage/app-directories';
 import { toDateKey } from '@/utils/date';
 
 const exportDirectory = new Directory(Paths.cache, 'mimo', 'backups');
@@ -169,45 +168,132 @@ export async function pickBackup(): Promise<BackupFile | null> {
   return backup;
 }
 
+/** Tables whose rows are also unique by name: a same-named local row is reused instead of duplicated. */
+const NAME_UNIQUE_TABLES: Partial<Record<BackupTable, { scopeColumn?: string }>> = {
+  categories: { scopeColumn: 'scope' },
+  payment_methods: {},
+  goal_categories: {},
+  appointment_categories: {},
+};
+
+/** Foreign keys that may point to a reused (remapped) row. */
+const REMAPPED_REFERENCES: { table: BackupTable; column: string; target: BackupTable }[] = [
+  { table: 'tasks', column: 'category_id', target: 'categories' },
+  { table: 'financial_transactions', column: 'category_id', target: 'categories' },
+  { table: 'financial_transactions', column: 'payment_method_id', target: 'payment_methods' },
+  { table: 'wishlist_items', column: 'category_id', target: 'categories' },
+  { table: 'budgets', column: 'category_id', target: 'categories' },
+  { table: 'savings_goals', column: 'category_id', target: 'goal_categories' },
+  { table: 'appointments', column: 'category_id', target: 'appointment_categories' },
+  { table: 'file_references', column: 'file_id', target: 'stored_files' },
+];
+
+/** What a merge added, per kind of record. */
+export type MergeResult = {
+  tasks: number;
+  transactions: number;
+  wishlistItems: number;
+  goals: number;
+  appointments: number;
+};
+
+function sqlValue(value: unknown): string | number | null {
+  return typeof value === 'string' || typeof value === 'number' ? value : null;
+}
+
 /**
- * Replaces all local data with the backup in a single SQL transaction. Images
- * are written first; if the database step fails, the new files are removed
- * and the current data stays untouched.
+ * Merges a backup into the local data without deleting anything:
+ * - rows whose id already exists keep the local version (no duplicates when
+ *   importing a backup of this same device);
+ * - categories and payment methods with an existing name are reused, and the
+ *   imported rows that pointed to them are re-pointed;
+ * - images identical to a stored one (same checksum) are not copied again;
+ * - app settings (theme, name, notifications) keep their current values.
+ * Everything runs in one SQL transaction; on failure nothing is imported and
+ * any image written for it is removed.
  */
-export async function restoreBackup(backup: BackupFile): Promise<void> {
+export async function mergeBackup(backup: BackupFile): Promise<MergeResult> {
   const database = await getDatabase();
-
+  const filesByPath = new Map(backup.files.map((entry) => [entry.relativePath, entry.base64]));
   const writtenFiles: File[] = [];
-  try {
-    for (const entry of backup.files) {
-      const file = resolveStoredImage(entry.relativePath);
-      if (file.exists) continue;
-      file.create({ intermediates: true });
-      await file.write(entry.base64, { encoding: 'base64' });
-      writtenFiles.push(file);
-    }
+  const added = new Map<BackupTable, number>();
 
+  try {
     await database.withExclusiveTransactionAsync(async (transaction) => {
-      for (const table of [...BACKUP_TABLES].reverse()) {
-        await transaction.runAsync(`DELETE FROM ${table}`);
-      }
+      // backup id → local id, for rows reused instead of inserted.
+      const remap = new Map<BackupTable, Map<string, string>>();
+      const remapFor = (table: BackupTable) => {
+        const map = remap.get(table) ?? new Map<string, string>();
+        remap.set(table, map);
+        return map;
+      };
 
       for (const table of BACKUP_TABLES) {
         // Only columns that exist in this schema version; names come from SQLite itself.
         const columns = new Set(
           (await transaction.getAllAsync<{ name: string }>(`PRAGMA table_info(${table})`)).map((column) => column.name),
         );
-        for (const row of backup.tables[table]) {
+
+        for (const original of backup.tables[table]) {
+          const row: BackupRow = { ...original };
+          for (const reference of REMAPPED_REFERENCES) {
+            if (reference.table !== table) continue;
+            const value = row[reference.column];
+            if (typeof value === 'string') row[reference.column] = remapFor(reference.target).get(value) ?? value;
+          }
+
+          const id = typeof row.id === 'string' ? row.id : null;
+          const idExists =
+            id !== null &&
+            columns.has('id') &&
+            (await transaction.getFirstAsync(`SELECT 1 AS found FROM ${table} WHERE id = ?`, id)) !== null;
+          if (idExists) continue;
+
+          const nameRule = NAME_UNIQUE_TABLES[table];
+          if (nameRule && id !== null && typeof row.name === 'string') {
+            const scope = nameRule.scopeColumn ? sqlValue(row[nameRule.scopeColumn]) : null;
+            const existing = await transaction.getFirstAsync<{ id: string }>(
+              `SELECT id FROM ${table} WHERE name = ? COLLATE NOCASE${nameRule.scopeColumn ? ` AND ${nameRule.scopeColumn} = ?` : ''}`,
+              ...(nameRule.scopeColumn ? [row.name, scope] : [row.name]),
+            );
+            if (existing) {
+              remapFor(table).set(id, existing.id);
+              continue;
+            }
+          }
+
+          if (table === 'stored_files' && id !== null) {
+            const sameImage =
+              typeof row.checksum === 'string'
+                ? await transaction.getFirstAsync<{ id: string }>('SELECT id FROM stored_files WHERE checksum = ?', row.checksum)
+                : null;
+            if (sameImage) {
+              remapFor(table).set(id, sameImage.id);
+              continue;
+            }
+            const relativePath = String(row.relative_path);
+            const base64 = filesByPath.get(relativePath);
+            if (!base64) continue; // Image missing from the backup: skip it (and its references).
+            const file = resolveStoredImage(relativePath);
+            if (!file.exists) {
+              file.create({ intermediates: true });
+              await file.write(base64, { encoding: 'base64' });
+              writtenFiles.push(file);
+            }
+          }
+
+          if (table === 'file_references') {
+            const fileExists = await transaction.getFirstAsync('SELECT 1 AS found FROM stored_files WHERE id = ?', sqlValue(row.file_id));
+            if (!fileExists) continue;
+          }
+
           const names = Object.keys(row).filter((name) => columns.has(name));
           if (names.length === 0) continue;
-          const values = names.map((name) => {
-            const value = row[name];
-            return typeof value === 'string' || typeof value === 'number' ? value : null;
-          });
-          await transaction.runAsync(
-            `INSERT INTO ${table} (${names.join(', ')}) VALUES (${names.map(() => '?').join(', ')})`,
-            values,
+          const result = await transaction.runAsync(
+            `INSERT OR IGNORE INTO ${table} (${names.join(', ')}) VALUES (${names.map(() => '?').join(', ')})`,
+            names.map((name) => sqlValue(row[name])),
           );
+          if (result.changes > 0) added.set(table, (added.get(table) ?? 0) + 1);
         }
       }
     });
@@ -220,19 +306,15 @@ export async function restoreBackup(backup: BackupFile): Promise<void> {
       }
     }
     if (error instanceof BackupError) throw error;
-    console.error('Falha ao restaurar backup.', error);
-    throw new BackupError('Não foi possível restaurar o backup. Seus dados atuais foram mantidos.');
+    console.error('Falha ao importar backup.', error);
+    throw new BackupError('Não foi possível importar o backup. Seus dados atuais foram mantidos.');
   }
 
-  // Remove images that the restored data no longer references.
-  const keep = new Set(backup.tables.stored_files.map((row) => String(row.relative_path)));
-  for (const item of imagesDirectory.list()) {
-    if (item instanceof File && !keep.has(item.name)) {
-      try {
-        item.delete();
-      } catch {
-        // Best effort cleanup.
-      }
-    }
-  }
+  return {
+    tasks: added.get('tasks') ?? 0,
+    transactions: added.get('financial_transactions') ?? 0,
+    wishlistItems: added.get('wishlist_items') ?? 0,
+    goals: added.get('savings_goals') ?? 0,
+    appointments: added.get('appointments') ?? 0,
+  };
 }
