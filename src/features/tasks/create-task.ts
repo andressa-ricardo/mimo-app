@@ -39,7 +39,7 @@ export async function createTask(input: NewTaskInput, withReminder: boolean): Pr
   let notificationId: string | null = null;
   try {
     notificationId = await scheduleTaskReminder(input.id, input.title, reminderDate);
-    console.info(`Lembrete agendado para ${reminderDate.toLocaleString('pt-BR')} (id ${notificationId}).`);
+    if (__DEV__) console.info(`Lembrete agendado para ${reminderDate.toLocaleString('pt-BR')} (id ${notificationId}).`);
     await setTaskReminder(input.id, notificationId);
     return 'scheduled';
   } catch (error: unknown) {

@@ -44,6 +44,8 @@ function isGranted(status: NotificationPermissionsStatus): boolean {
 }
 
 let channelsAvailable = Platform.OS === "android";
+/** Channels are created once per session; a failure is not retried (or re-logged). */
+let channelsAttempted = false;
 
 /**
  * Creates the Android channels. Expo Go on Android rejects this call (its
@@ -51,7 +53,8 @@ let channelsAvailable = Platform.OS === "android";
  * fatal: reminders then use the default channel instead.
  */
 async function ensureChannels(): Promise<void> {
-  if (Platform.OS !== "android") return;
+  if (Platform.OS !== "android" || channelsAttempted) return;
+  channelsAttempted = true;
   try {
     await setNotificationChannelAsync(TASK_CHANNEL_ID, {
       name: "Lembretes de tarefas",

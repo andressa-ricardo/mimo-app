@@ -8,9 +8,11 @@
     "scheme": "mimo",
     "userInterfaceStyle": "automatic",
     "ios": {
+      "bundleIdentifier": "app.mimo.organizer",
       "icon": "./assets/images/app-icon.png"
     },
     "android": {
+      "package": "app.mimo.organizer",
       "adaptiveIcon": {
         "backgroundColor": "#F7ECFA",
         "foregroundImage": "./assets/images/android-icon-foreground.png",
@@ -22,7 +24,7 @@
       ]
     },
     "web": {
-      "output": "server",
+      "output": "single",
       "favicon": "./assets/images/favicon.png"
     },
     "plugins": [
@@ -64,6 +66,17 @@
     "experiments": {
       "typedRoutes": true,
       "reactCompiler": true
-    }
+    },
+    "extra": {
+      "router": {
+        "asyncRoutes": {
+          "web": true
+        }
+      },
+      "eas": {
+        "projectId": "01b5131f-3d81-4d00-b0cb-a9a7539a7897"
+      }
+    },
+    "owner": "satandressa"
   }
 }
