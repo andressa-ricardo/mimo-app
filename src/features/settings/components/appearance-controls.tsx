@@ -129,35 +129,35 @@ const styles = StyleSheet.create({
     flex: 1,
     gap: 5,
     justifyContent: 'center',
-    minHeight: 68,
+    minHeight: 56,
   },
   appearanceRow: {
     flexDirection: 'row',
     gap: 8,
   },
   appearanceTitle: {
-    marginBottom: 10,
+    marginBottom: 7,
   },
   container: {
-    gap: 22,
+    gap: 14,
   },
   helper: {
-    marginTop: 5,
+    marginTop: 3,
   },
   pressed: {
     opacity: 0.7,
   },
   swatch: {
-    borderRadius: 22,
-    height: 40,
-    width: 40,
+    borderRadius: 18,
+    height: 32,
+    width: 32,
   },
   swatchRing: {
     alignItems: 'center',
-    borderRadius: 26,
+    borderRadius: 22,
     borderWidth: 1.5,
-    height: 48,
+    height: 40,
     justifyContent: 'center',
-    width: 48,
+    width: 40,
   },
 });

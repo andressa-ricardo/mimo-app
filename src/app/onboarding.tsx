@@ -1,6 +1,7 @@
-import Ionicons from '@expo/vector-icons/Ionicons';
-import { Redirect, router } from 'expo-router';
-import { useState } from 'react';
+import Ionicons from "@expo/vector-icons/Ionicons";
+import { Image } from "expo-image";
+import { Redirect, router } from "expo-router";
+import { useState } from "react";
 import {
   ActivityIndicator,
   KeyboardAvoidingView,
@@ -10,13 +11,13 @@ import {
   StyleSheet,
   TextInput,
   View,
-} from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+} from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
 
-import { AppText } from '@/components/ui/app-text';
-import { AppearanceControls } from '@/features/settings/components/appearance-controls';
-import { useAppTheme } from '@/theme/theme-provider';
-import type { AccentColor, ColorSchemePreference } from '@/types/preferences';
+import { AppText } from "@/components/ui/app-text";
+import { AppearanceControls } from "@/features/settings/components/appearance-controls";
+import { useAppTheme } from "@/theme/theme-provider";
+import type { AccentColor, ColorSchemePreference } from "@/types/preferences";
 
 export default function OnboardingScreen() {
   const {
@@ -32,7 +33,7 @@ export default function OnboardingScreen() {
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const normalizedName = name.trim();
 
-  if (profile.onboardingCompleted) return <Redirect href="/(tabs)/index" />;
+  if (profile.onboardingCompleted) return <Redirect href="/(tabs)" />;
 
   async function handleComplete() {
     if (!normalizedName || isSaving) return;
@@ -42,48 +43,57 @@ export default function OnboardingScreen() {
     try {
       await updatePreferences(preferences);
       await completeOnboarding(normalizedName);
-      router.replace('/(tabs)/index');
+      router.replace("/(tabs)");
     } catch {
-      setErrorMessage('Não foi possível salvar suas preferências. Tente novamente.');
+      setErrorMessage(
+        "Não foi possível salvar suas preferências. Tente novamente.",
+      );
       setIsSaving(false);
     }
   }
 
   async function updateAppearance(
-    change: Partial<{ accentColor: AccentColor; colorScheme: ColorSchemePreference }>,
+    change: Partial<{
+      accentColor: AccentColor;
+      colorScheme: ColorSchemePreference;
+    }>,
   ) {
     setErrorMessage(null);
     try {
       await updatePreferences(change);
     } catch {
-      setErrorMessage('Não foi possível salvar a aparência. Tente novamente.');
+      setErrorMessage("Não foi possível salvar a aparência. Tente novamente.");
     }
   }
 
   return (
     <KeyboardAvoidingView
-      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-      style={[styles.flex, { backgroundColor: colors.background }]}>
+      behavior={Platform.OS === "ios" ? "padding" : undefined}
+      style={[styles.flex, { backgroundColor: colors.background }]}
+    >
       <SafeAreaView style={styles.flex}>
         <ScrollView
           contentContainerStyle={styles.content}
           keyboardShouldPersistTaps="handled"
-          showsVerticalScrollIndicator={false}>
+          showsVerticalScrollIndicator={false}
+        >
           <View style={styles.brandBlock}>
-            <View style={[styles.logoMark, { backgroundColor: colors.accentSoft }]}>
-              <Ionicons color={colors.accent} name="sparkles" size={22} />
-            </View>
-            <AppText style={styles.logo}>mimo.</AppText>
-            <AppText color="secondary" style={styles.tagline} variant="label">
-              a little space for everything.
-            </AppText>
+            <Image
+              accessibilityLabel="mimo."
+              contentFit="contain"
+              source={require("@/assets/logo.png")}
+              style={styles.logoImage}
+            />
           </View>
 
-          <View style={[styles.card, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+          <View style={styles.formContent}>
             <View>
-              <AppText variant="subtitle">Seu espaço para tudo o que importa.</AppText>
-              <AppText color="secondary" style={styles.introText}>
-                Organize seus planos, finanças e pequenas conquistas em um só lugar.
+              <AppText style={styles.introTitle} variant="subtitle">
+                Seu espaço para tudo o que importa.
+              </AppText>
+              <AppText color="secondary" style={styles.introText} variant="caption">
+                Organize seus planos, finanças e pequenas conquistas em um só
+                lugar.
               </AppText>
             </View>
 
@@ -116,22 +126,33 @@ export default function OnboardingScreen() {
             <AppearanceControls
               accentColor={preferences.accentColor}
               colorScheme={preferences.colorScheme}
-              onAccentChange={(accentColor) => void updateAppearance({ accentColor })}
-              onColorSchemeChange={(colorScheme) => void updateAppearance({ colorScheme })}
+              onAccentChange={(accentColor) =>
+                void updateAppearance({ accentColor })
+              }
+              onColorSchemeChange={(colorScheme) =>
+                void updateAppearance({ colorScheme })
+              }
             />
 
-            <View style={[styles.preview, { backgroundColor: colors.accentSoft }]}>
+            <View
+              style={[styles.preview, { backgroundColor: colors.accentSoft }]}
+            >
               <View style={styles.previewCopy}>
                 <AppText color="accent" variant="caption">
                   UMA PRÉVIA DO SEU MIMO
                 </AppText>
                 <AppText style={styles.previewGreeting} variant="section">
-                  Olá{normalizedName ? `, ${normalizedName}` : ''} ✦
+                  Olá{normalizedName ? `, ${normalizedName}` : ""} ✦
                 </AppText>
               </View>
-              <View style={[styles.previewAvatar, { backgroundColor: colors.accent }]}>
+              <View
+                style={[
+                  styles.previewAvatar,
+                  { backgroundColor: colors.accent },
+                ]}
+              >
                 <AppText style={{ color: colors.onAccent }} variant="label">
-                  {normalizedName.charAt(0).toUpperCase() || 'M'}
+                  {normalizedName.charAt(0).toUpperCase() || "M"}
                 </AppText>
               </View>
             </View>
@@ -151,7 +172,8 @@ export default function OnboardingScreen() {
                 { backgroundColor: colors.accent },
                 (!normalizedName || isSaving) && styles.disabled,
                 pressed && styles.pressed,
-              ]}>
+              ]}
+            >
               {isSaving ? (
                 <ActivityIndicator color={colors.onAccent} />
               ) : (
@@ -159,7 +181,11 @@ export default function OnboardingScreen() {
                   <AppText style={{ color: colors.onAccent }} variant="label">
                     Começar
                   </AppText>
-                  <Ionicons color={colors.onAccent} name="arrow-forward" size={17} />
+                  <Ionicons
+                    color={colors.onAccent}
+                    name="arrow-forward"
+                    size={17}
+                  />
                 </>
               )}
             </Pressable>
@@ -172,27 +198,26 @@ export default function OnboardingScreen() {
 
 const styles = StyleSheet.create({
   brandBlock: {
-    alignItems: 'center',
-    marginBottom: 24,
+    alignItems: "center",
+    marginBottom: 12,
   },
-  card: {
-    borderRadius: 28,
-    borderWidth: 1,
-    gap: 26,
-    padding: 22,
+  formContent: {
+    gap: 18,
   },
   content: {
-    alignSelf: 'center',
+    alignSelf: "center",
+    flexGrow: 1,
     maxWidth: 520,
-    padding: 20,
-    paddingBottom: 36,
-    width: '100%',
+    paddingHorizontal: 20,
+    paddingBottom: 20,
+    paddingTop: 8,
+    width: "100%",
   },
   disabled: {
     opacity: 0.45,
   },
   fieldLabel: {
-    marginBottom: 9,
+    marginBottom: 5,
   },
   flex: {
     flex: 1,
@@ -200,42 +225,38 @@ const styles = StyleSheet.create({
   input: {
     borderRadius: 14,
     borderWidth: 1,
-    fontFamily: 'Inter_400Regular',
-    fontSize: 15,
-    height: 50,
+    fontFamily: "Inter_400Regular",
+    fontSize: 14,
+    height: 44,
     paddingHorizontal: 15,
   },
   introText: {
-    marginTop: 7,
+    lineHeight: 17,
+    marginTop: 3,
   },
-  logo: {
-    fontFamily: 'Inter_700Bold',
-    fontSize: 34,
-    letterSpacing: -1.3,
-    marginTop: 9,
+  introTitle: {
+    fontSize: 18,
+    lineHeight: 23,
   },
-  logoMark: {
-    alignItems: 'center',
-    borderRadius: 20,
-    height: 40,
-    justifyContent: 'center',
-    width: 40,
+  logoImage: {
+    aspectRatio: 16 / 9,
+    width: 100,
   },
   pressed: {
     opacity: 0.78,
   },
   preview: {
-    alignItems: 'center',
+    alignItems: "center",
     borderRadius: 18,
-    flexDirection: 'row',
-    padding: 15,
+    flexDirection: "row",
+    padding: 11,
   },
   previewAvatar: {
-    alignItems: 'center',
+    alignItems: "center",
     borderRadius: 18,
-    height: 36,
-    justifyContent: 'center',
-    width: 36,
+    height: 32,
+    justifyContent: "center",
+    width: 32,
   },
   previewCopy: {
     flex: 1,
@@ -244,14 +265,11 @@ const styles = StyleSheet.create({
     marginTop: 3,
   },
   startButton: {
-    alignItems: 'center',
+    alignItems: "center",
     borderRadius: 15,
-    flexDirection: 'row',
+    flexDirection: "row",
     gap: 8,
-    height: 52,
-    justifyContent: 'center',
-  },
-  tagline: {
-    marginTop: 2,
+    height: 46,
+    justifyContent: "center",
   },
 });

@@ -6,7 +6,7 @@ export default function EntryRoute() {
   const { profile } = useAppTheme();
 
   return profile.onboardingCompleted ? (
-    <Redirect href="/(tabs)/index" />
+    <Redirect href="/(tabs)" />
   ) : (
     <Redirect href="/onboarding" />
   );
