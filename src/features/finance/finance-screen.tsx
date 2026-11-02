@@ -9,7 +9,7 @@ import { AppText } from '@/components/ui/app-text';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { SwipeView } from '@/components/ui/swipe-view';
 import { Toast, type ToastMessage } from '@/components/ui/toast';
-import { confirmEntry } from '@/database/repositories/finance-repository';
+import { confirmEntry, getTransaction } from '@/database/repositories/finance-repository';
 import { capitalize, formatShortDate } from '@/features/finance/components/finance-ui';
 import { monthRangeOf } from '@/features/finance/month-data';
 import { BudgetTab } from '@/features/finance/tabs/budget-tab';
@@ -19,7 +19,7 @@ import { SummaryTab } from '@/features/finance/tabs/summary-tab';
 import { useFinanceMonth } from '@/features/finance/use-finance-month';
 import { notifyDataChanged } from '@/services/events/data-events';
 import { useAppTheme } from '@/theme/theme-provider';
-import { TransactionQuickSheet } from '@/features/quick-actions/transaction-quick-sheet';
+import { TransactionQuickSheet, type TransactionEdit } from '@/features/quick-actions/transaction-quick-sheet';
 import type { MonthEntry, TransactionType } from '@/types/finance';
 import { addMonthsToDateKey, parseDateKey } from '@/utils/date';
 import { formatCurrency } from '@/utils/format';
@@ -44,15 +44,20 @@ export function FinanceScreen() {
   const confirmingRef = useRef(false);
   const [toast, setToast] = useState<ToastMessage | null>(null);
   const [newTransaction, setNewTransaction] = useState<TransactionType | null>(null);
+  const [transactionEdit, setTransactionEdit] = useState<TransactionEdit | null>(null);
   const month = monthRangeOf(parseDateKey(monthStart));
   const state = useFinanceMonth(month);
 
   const showToast = useCallback((text: string) => setToast({ id: Date.now(), text }), []);
   const hideToast = useCallback(() => setToast(null), []);
-  const closeNewTransaction = useCallback(() => setNewTransaction(null), []);
+  const closeNewTransaction = useCallback(() => {
+    setNewTransaction(null);
+    setTransactionEdit(null);
+  }, []);
   const handleTransactionSaved = useCallback(
     (text: string) => {
       setNewTransaction(null);
+      setTransactionEdit(null);
       showToast(text);
     },
     [showToast],
@@ -81,6 +86,18 @@ export function FinanceScreen() {
   };
 
   const data = state.data;
+
+  /** Opens the stored transaction behind a history row (the occurrence date is kept for "end series"). */
+  const openTransaction = async (entry: MonthEntry) => {
+    try {
+      const transaction = await getTransaction(entry.transactionId);
+      if (transaction) setTransactionEdit({ transaction, occurrenceDate: entry.dueDate });
+      else showToast('Esta transação não existe mais.');
+    } catch (error: unknown) {
+      console.error('Falha ao abrir transação.', error);
+      showToast('Não foi possível abrir a transação.');
+    }
+  };
 
   return (
     <SafeAreaView edges={['top']} style={[styles.screen, { backgroundColor: colors.background }]}>
@@ -157,7 +174,13 @@ export function FinanceScreen() {
               onSelectTrend={(point) => setMonthStart(point.start)}
             />
           ) : tab === 'history' ? (
-            <HistoryTab entries={data.entries} paymentMethods={data.paymentMethods} />
+            <HistoryTab
+              entries={data.entries}
+              monthKey={month.key}
+              onEdit={(entry) => void openTransaction(entry)}
+              onFeedback={showToast}
+              paymentMethods={data.paymentMethods}
+            />
           ) : tab === 'budget' ? (
             <BudgetTab data={data} onFeedback={showToast} />
           ) : (
@@ -169,10 +192,11 @@ export function FinanceScreen() {
       <Toast message={toast} onHide={hideToast} />
 
       <TransactionQuickSheet
+        edit={transactionEdit}
         initialType={newTransaction ?? 'expense'}
         onClose={closeNewTransaction}
         onSaved={handleTransactionSaved}
-        visible={newTransaction !== null}
+        visible={newTransaction !== null || transactionEdit !== null}
       />
 
       {/* Nothing is saved until the user confirms; cancelling keeps the button. */}

@@ -2,6 +2,7 @@ import { Directory, File, Paths } from 'expo-file-system';
 import { isAvailableAsync, shareAsync } from 'expo-sharing';
 
 import { getDatabase } from '@/database/client';
+import { recordBackupExported } from '@/database/repositories/notices-repository';
 import {
   BACKUP_TABLES,
   CURRENT_BACKUP_FORMAT_VERSION,
@@ -98,6 +99,8 @@ export async function exportBackup(): Promise<void> {
     mimeType: 'application/json',
     UTI: 'public.json',
   });
+  // The share sheet cannot tell whether the file was really saved; this marks the attempt.
+  await recordBackupExported(Date.now());
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

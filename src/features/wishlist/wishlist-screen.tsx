@@ -183,13 +183,12 @@ export function WishlistScreen() {
             </AppText>
           </View>
           <Pressable
-            accessibilityHint="Adicione um produto e o link onde encontrá-lo"
-            accessibilityLabel="Adicionar desejo"
+            accessibilityLabel="Novo desejo"
             accessibilityRole="button"
             hitSlop={8}
             onPress={() => setAddOpen(true)}
             style={({ pressed }) => [styles.headerButton, pressed && styles.pressed]}>
-            <Ionicons color={colors.text} name="link-outline" size={21} />
+            <Ionicons color={colors.text} name="add" size={26} />
           </Pressable>
           <MoreModulesMenu />
         </View>

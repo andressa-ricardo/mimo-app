@@ -51,6 +51,7 @@ export function SummaryTab({ confirmingKey, data, monthKey, onConfirm, onSelectT
   const balanceColor =
     summary.balanceCents < 0 ? colors.expense : summary.balanceCents > 0 ? colors.income : colors.text;
   const topCategory = summary.byCategory[0]?.amountCents ?? 0;
+  const topIncomeCategory = summary.byIncomeCategory[0]?.amountCents ?? 0;
   const [categoryView, setCategoryView] = useState<'bars' | 'pie'>('bars');
 
   return (
@@ -141,6 +142,36 @@ export function SummaryTab({ confirmingKey, data, monthKey, onConfirm, onSelectT
           </Card>
         )}
       </View>
+
+      {summary.byIncomeCategory.length > 0 ? (
+        <View style={styles.section}>
+          <SectionHeader title="Receitas por categoria" />
+          <Card style={styles.listCard}>
+            {summary.byIncomeCategory.map((category) => (
+              <View key={category.categoryId ?? 'none'} style={styles.categoryRow}>
+                <View style={styles.categoryHeading}>
+                  <View
+                    style={[
+                      styles.dot,
+                      {
+                        backgroundColor: category.categoryId
+                          ? categoryColor(category.categoryId, isDark)
+                          : colors.chartMuted,
+                      },
+                    ]}
+                  />
+                  <AppText numberOfLines={1} style={styles.flex}>
+                    {category.name}
+                  </AppText>
+                  <AppText variant="label">{formatCurrency(category.amountCents)}</AppText>
+                </View>
+                {/* One hue (income) for ranked bars; the dot carries the category identity. */}
+                <ProgressBar color={colors.income} fraction={category.amountCents / topIncomeCategory} />
+              </View>
+            ))}
+          </Card>
+        </View>
+      ) : null}
 
       <View style={styles.section}>
         <SectionHeader title="Planejados e recorrentes" />

@@ -1,15 +1,17 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
+import { ActivityIndicator, Pressable, ScrollView, StyleSheet, TextInput, View } from 'react-native';
 
 import { AppText } from '@/components/ui/app-text';
 import { FilterChip } from '@/components/ui/filter-chip';
-import { capitalize, Card, EmptyNote } from '@/features/finance/components/finance-ui';
+import { capitalize, EmptyNote } from '@/features/finance/components/finance-ui';
 import {
   emptyHistoryFilters,
   HistoryFiltersSheet,
   type HistoryFilters,
 } from '@/features/finance/components/history-filters-sheet';
+import { exportMonthCsv, ExportError } from '@/features/finance/export-csv';
+import { searchable } from '@/features/wishlist/wishlist-meta';
 import { categoryColor } from '@/theme/category-colors';
 import { useAppTheme } from '@/theme/theme-provider';
 import type { PaymentMethod } from '@/types/categories';
@@ -43,14 +45,24 @@ function describeEntry(entry: MonthEntry): string {
   return parts.join(' · ');
 }
 
-function HistoryRow({ entry }: { entry: MonthEntry }) {
+function HistoryRow({ entry, onPress }: { entry: MonthEntry; onPress: () => void }) {
   const { colors, isDark } = useAppTheme();
   const planned = entry.status === 'planned';
   const income = entry.type === 'income';
   const amountColor = planned ? colors.textSecondary : income ? colors.income : colors.expense;
 
   return (
-    <Card style={styles.row}>
+    <Pressable
+      accessibilityHint="Editar ou excluir"
+      accessibilityLabel={`${entry.description}, ${income ? 'receita' : 'despesa'} de ${formatCurrency(entry.amountCents)}`}
+      accessibilityRole="button"
+      onPress={onPress}
+      style={({ pressed }) => [
+        styles.row,
+        styles.rowCard,
+        { backgroundColor: colors.surface, borderColor: colors.border },
+        pressed && styles.pressed,
+      ]}>
       <View
         style={[
           styles.dot,
@@ -67,18 +79,30 @@ function HistoryRow({ entry }: { entry: MonthEntry }) {
         {income ? '+' : '−'}
         {formatCurrency(entry.amountCents)}
       </AppText>
-    </Card>
+    </Pressable>
   );
 }
 
-export function HistoryTab({ entries, paymentMethods }: { entries: MonthEntry[]; paymentMethods: PaymentMethod[] }) {
+type HistoryTabProps = {
+  entries: MonthEntry[];
+  monthKey: string;
+  onEdit: (entry: MonthEntry) => void;
+  onFeedback: (message: string) => void;
+  paymentMethods: PaymentMethod[];
+};
+
+export function HistoryTab({ entries, monthKey, onEdit, onFeedback, paymentMethods }: HistoryTabProps) {
   const { colors } = useAppTheme();
+  const [query, setQuery] = useState('');
+  const [exporting, setExporting] = useState(false);
   const [typeFilter, setTypeFilter] = useState<TypeFilter>('all');
   const [filters, setFilters] = useState<HistoryFilters>(emptyHistoryFilters);
   const [filtersOpen, setFiltersOpen] = useState(false);
   const activeFilterCount = (filters.categoryId ? 1 : 0) + (filters.paymentMethodId ? 1 : 0);
 
+  const normalizedQuery = searchable(query.trim());
   const visible = entries
+    .filter((entry) => !normalizedQuery || searchable(entry.description).includes(normalizedQuery))
     .filter((entry) => matchesType(entry, typeFilter))
     .filter((entry) => filters.categoryId === null || entry.categoryId === filters.categoryId)
     .filter((entry) => filters.paymentMethodId === null || entry.paymentMethodId === filters.paymentMethodId);
@@ -88,8 +112,59 @@ export function HistoryTab({ entries, paymentMethods }: { entries: MonthEntry[];
     days.set(entry.dueDate, [...(days.get(entry.dueDate) ?? []), entry]);
   }
 
+  const exportCsv = async () => {
+    if (exporting) return;
+    setExporting(true);
+    try {
+      await exportMonthCsv(entries, monthKey);
+    } catch (error: unknown) {
+      if (!(error instanceof ExportError)) console.error('Falha ao exportar CSV.', error);
+      onFeedback(error instanceof ExportError ? error.message : 'Não foi possível exportar o mês.');
+    } finally {
+      setExporting(false);
+    }
+  };
+
   return (
     <View style={styles.container}>
+      <View style={styles.filterRow}>
+        <View style={[styles.search, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+          <Ionicons color={colors.textSecondary} name="search-outline" size={16} />
+          <TextInput
+            accessibilityLabel="Buscar no histórico"
+            autoCorrect={false}
+            onChangeText={setQuery}
+            placeholder="Buscar pela descrição"
+            placeholderTextColor={colors.textSecondary}
+            returnKeyType="search"
+            selectionColor={colors.accent}
+            style={[styles.searchInput, { color: colors.text }]}
+            value={query}
+          />
+          {query ? (
+            <Pressable accessibilityLabel="Limpar busca" hitSlop={8} onPress={() => setQuery('')}>
+              <Ionicons color={colors.textSecondary} name="close-circle" size={16} />
+            </Pressable>
+          ) : null}
+        </View>
+        <Pressable
+          accessibilityLabel="Exportar o mês em CSV"
+          accessibilityRole="button"
+          disabled={exporting}
+          onPress={() => void exportCsv()}
+          style={({ pressed }) => [
+            styles.filterButton,
+            { backgroundColor: colors.surface, borderColor: colors.border },
+            pressed && styles.pressed,
+          ]}>
+          {exporting ? (
+            <ActivityIndicator color={colors.accent} size="small" />
+          ) : (
+            <Ionicons color={colors.text} name="download-outline" size={18} />
+          )}
+        </Pressable>
+      </View>
+
       <View style={styles.filterRow}>
         <ScrollView contentContainerStyle={styles.chips} horizontal showsHorizontalScrollIndicator={false} style={styles.flex}>
           {typeFilters.map((filter) => (
@@ -118,7 +193,11 @@ export function HistoryTab({ entries, paymentMethods }: { entries: MonthEntry[];
 
       {days.size === 0 ? (
         <EmptyNote>
-          {entries.length === 0 ? 'Nenhuma transação neste mês.' : 'Nenhuma transação com esses filtros.'}
+          {entries.length === 0
+            ? 'Nenhuma transação neste mês.'
+            : normalizedQuery
+              ? 'Nenhuma transação encontrada para essa busca.'
+              : 'Nenhuma transação com esses filtros.'}
         </EmptyNote>
       ) : (
         [...days].map(([day, dayEntries]) => (
@@ -127,7 +206,7 @@ export function HistoryTab({ entries, paymentMethods }: { entries: MonthEntry[];
               {capitalize(dayFormatter.format(parseDateKey(day)))}
             </AppText>
             {dayEntries.map((entry) => (
-              <HistoryRow entry={entry} key={entry.key} />
+              <HistoryRow entry={entry} key={entry.key} onPress={() => onEdit(entry)} />
             ))}
           </View>
         ))
@@ -148,6 +227,22 @@ export function HistoryTab({ entries, paymentMethods }: { entries: MonthEntry[];
 }
 
 const styles = StyleSheet.create({
+  search: {
+    alignItems: 'center',
+    borderRadius: 14,
+    borderWidth: 1,
+    flex: 1,
+    flexDirection: 'row',
+    gap: 8,
+    minHeight: 40,
+    paddingHorizontal: 12,
+  },
+  searchInput: {
+    flex: 1,
+    fontFamily: 'Inter_400Regular',
+    fontSize: 13,
+    paddingVertical: 8,
+  },
   amount: {
     fontFamily: 'Inter_600SemiBold',
     fontSize: 14,
@@ -185,6 +280,10 @@ const styles = StyleSheet.create({
   },
   pressed: {
     opacity: 0.7,
+  },
+  rowCard: {
+    borderRadius: 18,
+    borderWidth: 1,
   },
   row: {
     alignItems: 'center',

@@ -21,8 +21,8 @@ export async function insertTransactionRows(transaction: SQLiteDatabase, input: 
   await transaction.runAsync(
     `INSERT INTO financial_transactions (
        id, type, description, amount_cents, category_id, payment_method_id, transaction_date,
-       installment_count, recurrence_frequency, recurrence_interval, status, created_at, updated_at
-     ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?, ?)`,
+       installment_count, recurrence_frequency, recurrence_interval, recurrence_end_date, status, created_at, updated_at
+     ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?, ?, ?)`,
     input.id,
     input.type,
     input.description,
@@ -32,17 +32,26 @@ export async function insertTransactionRows(transaction: SQLiteDatabase, input: 
     input.date,
     input.recurring ? 1 : input.installmentCount,
     input.recurring ? 'monthly' : null,
+    input.recurring ? input.recurrenceEndDate : null,
     input.status,
     now,
     now,
   );
+  await insertEntryRows(transaction, input.id, entries, now);
+}
 
+async function insertEntryRows(
+  transaction: SQLiteDatabase,
+  transactionId: string,
+  entries: ReturnType<typeof buildEntryDrafts>,
+  now: number,
+): Promise<void> {
   for (const entry of entries) {
     await transaction.runAsync(
       `INSERT INTO financial_entries (id, transaction_id, sequence, amount_cents, due_date, status, created_at)
        VALUES (?, ?, ?, ?, ?, ?, ?)`,
       randomUUID(),
-      input.id,
+      transactionId,
       entry.sequence,
       entry.amountCents,
       entry.dueDate,
@@ -50,6 +59,128 @@ export async function insertTransactionRows(transaction: SQLiteDatabase, input: 
       now,
     );
   }
+}
+
+type TransactionRow = {
+  id: string;
+  type: TransactionType;
+  description: string;
+  amount_cents: number;
+  category_id: string | null;
+  payment_method_id: string | null;
+  transaction_date: DateKey;
+  installment_count: number;
+  recurrence_frequency: string | null;
+  recurrence_end_date: DateKey | null;
+  status: TransactionStatus;
+};
+
+export async function getTransaction(id: string): Promise<NewTransactionInput | null> {
+  const database = await getDatabase();
+  const row = await database.getFirstAsync<TransactionRow>(
+    `SELECT id, type, description, amount_cents, category_id, payment_method_id, transaction_date,
+       installment_count, recurrence_frequency, recurrence_end_date, status
+     FROM financial_transactions WHERE id = ?`,
+    id,
+  );
+  if (!row) return null;
+  return {
+    id: row.id,
+    type: row.type,
+    description: row.description,
+    amountCents: row.amount_cents,
+    categoryId: row.category_id,
+    paymentMethodId: row.payment_method_id,
+    date: row.transaction_date,
+    installmentCount: row.installment_count,
+    recurring: row.recurrence_frequency !== null,
+    recurrenceEndDate: row.recurrence_end_date,
+    status: row.status,
+  };
+}
+
+/**
+ * Saves edits. Description, category, payment method and the series end date
+ * change in place. If the money part changes (value, date, installments,
+ * repetition, planned/confirmed), the month entries are rebuilt from scratch
+ * — so totals never mix old and new amounts.
+ */
+export async function updateTransaction(input: NewTransactionInput): Promise<void> {
+  const database = await getDatabase();
+  const now = Date.now();
+
+  await database.withExclusiveTransactionAsync(async (transaction) => {
+    const existing = await transaction.getFirstAsync<TransactionRow>(
+      `SELECT id, type, description, amount_cents, category_id, payment_method_id, transaction_date,
+         installment_count, recurrence_frequency, recurrence_end_date, status
+       FROM financial_transactions WHERE id = ?`,
+      input.id,
+    );
+    if (!existing) throw new Error('Transação não encontrada.');
+
+    const moneyChanged =
+      existing.type !== input.type ||
+      existing.amount_cents !== input.amountCents ||
+      existing.transaction_date !== input.date ||
+      existing.installment_count !== (input.recurring ? 1 : input.installmentCount) ||
+      (existing.recurrence_frequency !== null) !== input.recurring ||
+      existing.status !== input.status;
+
+    await transaction.runAsync(
+      `UPDATE financial_transactions SET type = ?, description = ?, amount_cents = ?, category_id = ?,
+         payment_method_id = ?, transaction_date = ?, installment_count = ?, recurrence_frequency = ?,
+         recurrence_end_date = ?, status = ?, updated_at = ?
+       WHERE id = ?`,
+      input.type,
+      input.description,
+      input.amountCents,
+      input.categoryId,
+      input.paymentMethodId,
+      input.date,
+      input.recurring ? 1 : input.installmentCount,
+      input.recurring ? 'monthly' : null,
+      input.recurring ? input.recurrenceEndDate : null,
+      input.status,
+      now,
+      input.id,
+    );
+
+    if (moneyChanged) {
+      await transaction.runAsync('DELETE FROM financial_entries WHERE transaction_id = ?', input.id);
+      await insertEntryRows(transaction, input.id, buildEntryDrafts(input), now);
+    } else if (input.recurring && input.recurrenceEndDate) {
+      // A new end date drops stored occurrences after it.
+      await transaction.runAsync(
+        'DELETE FROM financial_entries WHERE transaction_id = ? AND due_date > ?',
+        input.id,
+        input.recurrenceEndDate,
+      );
+    }
+  });
+}
+
+/** Removes the transaction and all its installments/occurrences (cascade). */
+export async function deleteTransaction(id: string): Promise<void> {
+  const database = await getDatabase();
+  await database.runAsync('DELETE FROM financial_transactions WHERE id = ?', id);
+}
+
+/**
+ * Ends a recurring series: occurrences up to `lastDate` stay in the history,
+ * later ones disappear (stored ones are deleted, projected ones stop).
+ */
+export async function endRecurringSeries(id: string, lastDate: DateKey): Promise<void> {
+  const database = await getDatabase();
+  await database.withExclusiveTransactionAsync(async (transaction) => {
+    await transaction.runAsync(
+      `UPDATE financial_transactions SET recurrence_end_date = ?, updated_at = ?
+       WHERE id = ? AND recurrence_frequency IS NOT NULL`,
+      lastDate,
+      Date.now(),
+      id,
+    );
+    await transaction.runAsync('DELETE FROM financial_entries WHERE transaction_id = ? AND due_date > ?', id, lastDate);
+  });
 }
 
 export async function insertTransaction(input: NewTransactionInput): Promise<void> {

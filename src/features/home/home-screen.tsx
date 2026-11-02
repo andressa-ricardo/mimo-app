@@ -21,6 +21,7 @@ import type {
   HomeWishlistItem,
 } from '@/features/home/home-types';
 import { goalProgress } from '@/features/goals/goal-math';
+import { HomeNotices } from '@/features/home/home-notices';
 import { useHomeSummary } from '@/features/home/use-home-summary';
 import { TaskQuickSheet } from '@/features/quick-actions/task-quick-sheet';
 import { TransactionQuickSheet } from '@/features/quick-actions/transaction-quick-sheet';
@@ -100,10 +101,18 @@ function FinanceCard({ budgetCents, expenseCents }: { budgetCents: number | null
   const remaining = hasBudget ? Math.max(budgetCents - expenseCents, 0) : null;
 
   return (
-    <View style={[styles.financeCard, { backgroundColor: colors.accent }]}>
-      <AppText style={[styles.onAccentMuted, { color: colors.onAccent }]} variant="label">
-        Gastos deste mês
-      </AppText>
+    <Pressable
+      accessibilityHint="Abre Finanças"
+      accessibilityLabel={`Gastos deste mês: ${formatCurrency(expenseCents)}`}
+      accessibilityRole="button"
+      onPress={() => router.push('/finances')}
+      style={({ pressed }) => [styles.financeCard, { backgroundColor: colors.accent }, pressed && styles.pressed]}>
+      <View style={styles.financeHeading}>
+        <AppText style={[styles.onAccentMuted, { color: colors.onAccent }]} variant="label">
+          Gastos deste mês
+        </AppText>
+        <Ionicons color={colors.onAccent} name="chevron-forward" size={16} style={styles.onAccentMuted} />
+      </View>
       <AppText style={[styles.financeAmount, { color: colors.onAccent }]}>
         {formatCurrency(expenseCents)}
       </AppText>
@@ -125,7 +134,7 @@ function FinanceCard({ budgetCents, expenseCents }: { budgetCents: number | null
           </AppText>
         ) : null}
       </View>
-    </View>
+    </Pressable>
   );
 }
 
@@ -456,6 +465,7 @@ export function HomeScreen() {
         </View>
 
         <QuickActions onOpen={setActiveSheet} />
+        <HomeNotices onFeedback={(text) => setToast({ id: Date.now(), text })} />
         <FinanceCard {...data.monthlyFinance} />
         <SecondaryShortcuts />
 
@@ -542,6 +552,11 @@ const styles = StyleSheet.create({
   financeCard: {
     borderRadius: 20,
     padding: 18,
+  },
+  financeHeading: {
+    alignItems: 'center',
+    flexDirection: 'row',
+    justifyContent: 'space-between',
   },
   financeFooter: {
     flexDirection: 'row',

@@ -10,13 +10,20 @@ import {
 } from '@/components/forms/bottom-sheet';
 import { CategorySelector } from '@/components/forms/category-selector';
 import { CurrencyInput } from '@/components/forms/currency-input';
-import { DateField } from '@/components/forms/date-field';
+import { DateField, OptionalDateField } from '@/components/forms/date-field';
 import { PrimaryButton } from '@/components/forms/primary-button';
 import { SegmentedControl } from '@/components/forms/segmented-control';
 import { SelectField } from '@/components/forms/select-field';
 import { TextField } from '@/components/forms/text-field';
 import { ToggleField, ToggleGroup } from '@/components/forms/toggle-field';
-import { insertTransaction } from '@/database/repositories/finance-repository';
+import { ChoiceDialog } from '@/components/ui/choice-dialog';
+import { ConfirmDialog } from '@/components/ui/confirm-dialog';
+import {
+  deleteTransaction,
+  endRecurringSeries,
+  insertTransaction,
+  updateTransaction,
+} from '@/database/repositories/finance-repository';
 import { MAX_INSTALLMENTS } from '@/features/finance/finance-calculations';
 import { findPreset, PRESET_VALUE_PREFIX, unusedPresets } from '@/features/finance/payment-presets';
 import { FormError, formStyles } from '@/features/quick-actions/form-parts';
@@ -28,8 +35,8 @@ import {
 } from '@/features/quick-actions/use-form-options';
 import { notifyDataChanged } from '@/services/events/data-events';
 import { useAppTheme } from '@/theme/theme-provider';
-import type { TransactionType } from '@/types/finance';
-import { toDateKey } from '@/utils/date';
+import type { NewTransactionInput, TransactionType } from '@/types/finance';
+import { addDaysToDateKey, formatDateKey, toDateKey, type DateKey } from '@/utils/date';
 import { formatCurrency } from '@/utils/format';
 import { splitInstallments } from '@/utils/money';
 
@@ -49,26 +56,44 @@ function describeInstallments(amountCents: number | null, count: number | null):
     : `1ª de ${formatCurrency(first)} e demais de ${formatCurrency(last)}, uma por mês`;
 }
 
+/** Editing context: the stored transaction and the occurrence that was tapped. */
+export type TransactionEdit = { transaction: NewTransactionInput; occurrenceDate: DateKey };
+
 type TransactionFormProps = {
+  edit: TransactionEdit | null;
   initialType: TransactionType;
   onSaved: QuickSheetProps['onSaved'];
 };
 
-function TransactionForm({ initialType, onSaved }: TransactionFormProps) {
+function TransactionForm({ edit, initialType, onSaved }: TransactionFormProps) {
   const { colors } = useAppTheme();
-  const [transactionId] = useState(() => randomUUID());
-  const [initialDate] = useState(() => toDateKey(new Date()));
-  const [type, setType] = useState<TransactionType>(initialType);
-  const [amountCents, setAmountCents] = useState<number | null>(null);
-  const [description, setDescription] = useState('');
-  const [categoryId, setCategoryId] = useState<string | null>(null);
-  const [date, setDate] = useState(initialDate);
-  const [paymentMethodId, setPaymentMethodId] = useState<string | null>(null);
-  const [installmentsText, setInstallmentsText] = useState('1');
-  const [recurring, setRecurring] = useState(false);
-  const [planned, setPlanned] = useState(false);
-  const [errors, setErrors] = useState<{ amount?: string; description?: string; installments?: string }>({});
+  const existing = edit?.transaction ?? null;
+  const [transactionId] = useState(() => existing?.id ?? randomUUID());
+  const [initial] = useState(() => ({
+    type: existing?.type ?? initialType,
+    amountCents: existing?.amountCents ?? null,
+    description: existing?.description ?? '',
+    categoryId: existing?.categoryId ?? null,
+    date: existing?.date ?? toDateKey(new Date()),
+    paymentMethodId: existing?.paymentMethodId ?? null,
+    installmentsText: String(existing?.installmentCount ?? 1),
+    recurring: existing?.recurring ?? false,
+    recurrenceEndDate: existing?.recurrenceEndDate ?? null,
+    planned: existing?.status === 'planned',
+  }));
+  const [type, setType] = useState<TransactionType>(initial.type);
+  const [amountCents, setAmountCents] = useState<number | null>(initial.amountCents);
+  const [description, setDescription] = useState(initial.description);
+  const [categoryId, setCategoryId] = useState<string | null>(initial.categoryId);
+  const [date, setDate] = useState(initial.date);
+  const [paymentMethodId, setPaymentMethodId] = useState<string | null>(initial.paymentMethodId);
+  const [installmentsText, setInstallmentsText] = useState(initial.installmentsText);
+  const [recurring, setRecurring] = useState(initial.recurring);
+  const [recurrenceEndDate, setRecurrenceEndDate] = useState<DateKey | null>(initial.recurrenceEndDate);
+  const [planned, setPlanned] = useState(initial.planned);
+  const [errors, setErrors] = useState<{ amount?: string; description?: string; installments?: string; end?: string }>({});
   const [formError, setFormError] = useState<string | null>(null);
+  const [confirm, setConfirm] = useState<'delete' | 'series' | null>(null);
   const [saving, setSaving] = useState(false);
   const savingRef = useRef(false);
   const { categories, addCategory } = useCategories(type);
@@ -77,18 +102,21 @@ function TransactionForm({ initialType, onSaved }: TransactionFormProps) {
   const isExpense = type === 'expense';
   const installmentCount = isExpense ? parseInstallments(installmentsText) : 1;
   const hasInstallments = installmentCount !== null && installmentCount > 1;
+  const isRecurring = recurring && !hasInstallments;
   const typeColor = isExpense ? colors.expense : colors.income;
+  const noun = isExpense ? 'Despesa' : 'Receita';
 
   useBottomSheetDirty(
-    amountCents !== null ||
-      description.trim().length > 0 ||
-      categoryId !== null ||
-      paymentMethodId !== null ||
-      date !== initialDate ||
-      installmentsText !== '1' ||
-      recurring ||
-      planned ||
-      type !== initialType,
+    amountCents !== initial.amountCents ||
+      description.trim() !== initial.description ||
+      categoryId !== initial.categoryId ||
+      paymentMethodId !== initial.paymentMethodId ||
+      date !== initial.date ||
+      installmentsText !== initial.installmentsText ||
+      recurring !== initial.recurring ||
+      recurrenceEndDate !== initial.recurrenceEndDate ||
+      planned !== initial.planned ||
+      type !== initial.type,
   );
 
   // Picking a suggestion registers it (with type and bank) the first time.
@@ -112,8 +140,24 @@ function TransactionForm({ initialType, onSaved }: TransactionFormProps) {
     if (next === 'income') setInstallmentsText('1');
   };
 
-  const submit = async () => {
+  const run = async (action: () => Promise<string>) => {
     if (savingRef.current) return;
+    savingRef.current = true;
+    setSaving(true);
+    setFormError(null);
+    try {
+      const message = await action();
+      notifyDataChanged('finance');
+      onSaved(message);
+    } catch (error: unknown) {
+      setConfirm(null);
+      setFormError(describeError(error, 'Não foi possível salvar a transação. Tente novamente.'));
+      savingRef.current = false;
+      setSaving(false);
+    }
+  };
+
+  const submit = () => {
     const normalizedDescription = description.trim();
     const nextErrors: typeof errors = {};
     if (amountCents === null || amountCents <= 0) nextErrors.amount = 'Informe um valor maior que zero.';
@@ -122,35 +166,37 @@ function TransactionForm({ initialType, onSaved }: TransactionFormProps) {
     else if (amountCents !== null && amountCents > 0 && installmentCount > amountCents) {
       nextErrors.installments = 'O valor é pequeno demais para esse número de parcelas.';
     }
+    if (isRecurring && recurrenceEndDate !== null && recurrenceEndDate < date) {
+      nextErrors.end = 'O fim da repetição não pode ser antes da data.';
+    }
     setErrors(nextErrors);
     if (Object.keys(nextErrors).length > 0 || amountCents === null || installmentCount === null) return;
 
-    savingRef.current = true;
-    setSaving(true);
-    setFormError(null);
-    try {
-      const isRecurring = recurring && installmentCount === 1;
-      await insertTransaction({
-        id: transactionId,
-        type,
-        description: normalizedDescription,
-        amountCents,
-        categoryId,
-        paymentMethodId,
-        date,
-        installmentCount,
-        recurring: isRecurring,
-        status: planned ? 'planned' : 'confirmed',
-      });
-      notifyDataChanged('finance');
-      const noun = isExpense ? 'Despesa' : 'Receita';
-      onSaved(planned ? `${noun} planejada salva.` : `${noun} salva.`);
-    } catch (error: unknown) {
-      setFormError(describeError(error, 'Não foi possível salvar a transação. Tente novamente.'));
-      savingRef.current = false;
-      setSaving(false);
-    }
+    const input: NewTransactionInput = {
+      id: transactionId,
+      type,
+      description: normalizedDescription,
+      amountCents,
+      categoryId,
+      paymentMethodId,
+      date,
+      installmentCount,
+      recurring: isRecurring,
+      recurrenceEndDate: isRecurring ? recurrenceEndDate : null,
+      status: planned ? 'planned' : 'confirmed',
+    };
+    void run(async () => {
+      if (existing) {
+        await updateTransaction(input);
+        return `${noun} atualizada.`;
+      }
+      await insertTransaction(input);
+      return planned ? `${noun} planejada salva.` : `${noun} salva.`;
+    });
   };
+
+  // Ending a series from a later occurrence keeps everything before it.
+  const canEndSeries = existing?.recurring === true && edit !== null && edit.occurrenceDate > existing.date;
 
   return (
     <>
@@ -167,6 +213,7 @@ function TransactionForm({ initialType, onSaved }: TransactionFormProps) {
 
         <CurrencyInput
           error={errors.amount}
+          helper={existing?.recurring ? 'Valor de cada ocorrência.' : existing && existing.installmentCount > 1 ? 'Valor total da compra.' : null}
           label="Valor (R$)"
           large
           onChange={(cents) => {
@@ -189,15 +236,15 @@ function TransactionForm({ initialType, onSaved }: TransactionFormProps) {
           value={description}
         />
 
-        <CategorySelector
-          categories={categories}
-          onChange={setCategoryId}
-          onCreate={addCategory}
-          value={categoryId}
-        />
+        <CategorySelector categories={categories} onChange={setCategoryId} onCreate={addCategory} value={categoryId} />
 
         <View style={formStyles.row}>
-          <DateField containerStyle={formStyles.half} label="Data" onChange={setDate} value={date} />
+          <DateField
+            containerStyle={formStyles.half}
+            label={existing?.recurring || (existing && existing.installmentCount > 1) ? 'Primeira data' : 'Data'}
+            onChange={setDate}
+            value={date}
+          />
           <SelectField
             addLabel="Outra forma de pagamento"
             addPlaceholder="Ex.: Crédito Sicredi"
@@ -240,7 +287,7 @@ function TransactionForm({ initialType, onSaved }: TransactionFormProps) {
             disabled={hasInstallments}
             label="Recorrente"
             onChange={setRecurring}
-            value={recurring && !hasInstallments}
+            value={isRecurring}
           />
           <ToggleField
             description="Não entra no total gasto até ser confirmado"
@@ -250,29 +297,119 @@ function TransactionForm({ initialType, onSaved }: TransactionFormProps) {
           />
         </ToggleGroup>
 
+        {isRecurring ? (
+          <View style={formStyles.group}>
+            <OptionalDateField
+              label="Repetir até (opcional)"
+              onChange={(value) => {
+                setRecurrenceEndDate(value);
+                if (errors.end) setErrors((current) => ({ ...current, end: undefined }));
+              }}
+              placeholder="Sem data final"
+              value={recurrenceEndDate}
+            />
+            {errors.end ? <FormError message={errors.end} /> : null}
+          </View>
+        ) : null}
+
         {formError ? <FormError message={formError} /> : null}
       </BottomSheetScrollView>
       <BottomSheetFooter>
-        <PrimaryButton label="Salvar" loading={saving} onPress={() => void submit()} />
+        <View style={formStyles.group}>
+          <PrimaryButton label="Salvar" loading={saving && confirm === null} onPress={submit} />
+          {existing ? (
+            <PrimaryButton
+              disabled={saving}
+              icon="trash-outline"
+              label={existing.recurring ? 'Excluir ou encerrar' : 'Excluir'}
+              onPress={() => setConfirm(existing.recurring ? 'series' : 'delete')}
+              variant="outlined"
+            />
+          ) : null}
+        </View>
       </BottomSheetFooter>
+
+      <ConfirmDialog
+        cancelLabel="Cancelar"
+        confirmLabel="Excluir"
+        loading={saving}
+        message={
+          existing && existing.installmentCount > 1
+            ? `As ${existing.installmentCount} parcelas de "${existing.description}" serão excluídas.`
+            : `"${existing?.description ?? ''}" será excluída do histórico.`
+        }
+        onCancel={() => setConfirm(null)}
+        onConfirm={() =>
+          void run(async () => {
+            if (existing) await deleteTransaction(existing.id);
+            return `${noun} excluída.`;
+          })
+        }
+        title="Excluir transação?"
+        tone="destructive"
+        visible={confirm === 'delete'}
+      />
+      <ChoiceDialog
+        choices={[
+          ...(canEndSeries && edit
+            ? [
+                {
+                  label: `Encerrar a partir de ${formatDateKey(edit.occurrenceDate)}`,
+                  onPress: () =>
+                    void run(async () => {
+                      await endRecurringSeries(edit.transaction.id, addDaysToDateKey(edit.occurrenceDate, -1));
+                      return 'Repetição encerrada. Os meses anteriores foram mantidos.';
+                    }),
+                },
+              ]
+            : []),
+          {
+            label: 'Excluir toda a série',
+            tone: 'destructive' as const,
+            onPress: () =>
+              void run(async () => {
+                if (existing) await deleteTransaction(existing.id);
+                return 'Série excluída.';
+              }),
+          },
+        ]}
+        loading={saving}
+        message={
+          canEndSeries
+            ? 'Encerrar mantém os lançamentos anteriores no histórico. Excluir apaga a série inteira.'
+            : 'Toda a série será apagada, inclusive os meses anteriores.'
+        }
+        onCancel={() => setConfirm(null)}
+        title="Transação recorrente"
+        visible={confirm === 'series'}
+      />
     </>
   );
 }
 
 type TransactionQuickSheetProps = QuickSheetProps & {
+  /** When set, the sheet edits this transaction. */
+  edit?: TransactionEdit | null;
   /** Which segment starts selected (Despesa by default). */
   initialType?: TransactionType;
 };
 
 export function TransactionQuickSheet({
+  edit = null,
   initialType = 'expense',
   onClose,
   onSaved,
   visible,
 }: TransactionQuickSheetProps) {
+  // Keep the last content while the sheet animates out after `edit` is cleared.
+  const [shownEdit, setShownEdit] = useState<TransactionEdit | null>(null);
+  if (edit && edit !== shownEdit) setShownEdit(edit);
+  if (visible && !edit && shownEdit) setShownEdit(null);
+  const current = visible ? edit : shownEdit;
+
   return (
-    <BottomSheet onRequestClose={onClose} title="Nova transação" visible={visible}>
-      <TransactionForm initialType={initialType} onSaved={onSaved} />
+    <BottomSheet onRequestClose={onClose} title={current ? 'Editar transação' : 'Nova transação'} visible={visible}>
+      <TransactionForm edit={current} initialType={initialType} onSaved={onSaved} />
     </BottomSheet>
   );
 }

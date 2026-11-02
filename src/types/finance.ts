@@ -14,6 +14,8 @@ export type NewTransactionInput = {
   date: DateKey;
   installmentCount: number;
   recurring: boolean;
+  /** Last day a recurring series still occurs (inclusive); null = no end. */
+  recurrenceEndDate: DateKey | null;
   status: TransactionStatus;
 };
 

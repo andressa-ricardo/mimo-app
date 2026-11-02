@@ -180,6 +180,7 @@ export function TasksScreen() {
   // until the filter changes, so a check can be undone in place.
   const [keptIds, setKeptIds] = useState<Set<string>>(() => new Set());
   const [editing, setEditing] = useState<TaskItem | null>(null);
+  const [creating, setCreating] = useState(false);
   const [deleting, setDeleting] = useState<TaskItem | null>(null);
   const [busy, setBusy] = useState(false);
   const busyIds = useRef(new Set<string>());
@@ -188,6 +189,14 @@ export function TasksScreen() {
   const showToast = useCallback((text: string) => setToast({ id: Date.now(), text }), []);
   const hideToast = useCallback(() => setToast(null), []);
   const closeEdit = useCallback(() => setEditing(null), []);
+  const closeCreate = useCallback(() => setCreating(false), []);
+  const handleCreated = useCallback(
+    (text: string) => {
+      setCreating(false);
+      showToast(text);
+    },
+    [showToast],
+  );
   const handleEdited = useCallback(
     (text: string) => {
       setEditing(null);
@@ -265,6 +274,14 @@ export function TasksScreen() {
           <AppText style={styles.flex} variant="title">
             Tasks
           </AppText>
+          <Pressable
+            accessibilityLabel="Nova tarefa"
+            accessibilityRole="button"
+            hitSlop={8}
+            onPress={() => setCreating(true)}
+            style={({ pressed }) => [styles.headerButton, pressed && styles.pressed]}>
+            <Ionicons color={colors.text} name="add" size={26} />
+          </Pressable>
           <MoreModulesMenu />
         </View>
 
@@ -316,6 +333,7 @@ export function TasksScreen() {
 
       <Toast message={toast} onHide={hideToast} />
       <TaskQuickSheet onClose={closeEdit} onSaved={handleEdited} task={editing} visible={editing !== null} />
+      <TaskQuickSheet onClose={closeCreate} onSaved={handleCreated} visible={creating} />
       <ConfirmDialog
         cancelLabel="Cancelar"
         confirmLabel="Excluir"
@@ -387,6 +405,13 @@ const styles = StyleSheet.create({
   header: {
     alignItems: 'center',
     flexDirection: 'row',
+    gap: 2,
+  },
+  headerButton: {
+    alignItems: 'center',
+    height: 36,
+    justifyContent: 'center',
+    width: 36,
   },
   message: {
     marginTop: 32,

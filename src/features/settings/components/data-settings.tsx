@@ -13,6 +13,7 @@ import {
   type StorageSummary,
 } from '@/services/backup/backup-service';
 import type { BackupFile } from '@/services/backup/backup-types';
+import { getNoticeState } from '@/database/repositories/notices-repository';
 import { subscribeToDataChanges } from '@/services/events/data-events';
 import { useAppTheme } from '@/theme/theme-provider';
 import { formatDateKey, toDateKey } from '@/utils/date';
@@ -65,12 +66,16 @@ type DataSettingsProps = {
 export function DataSettings({ onFeedback, onRestored }: DataSettingsProps) {
   const { colors } = useAppTheme();
   const [summary, setSummary] = useState<StorageSummary | null>(null);
+  const [lastBackupAt, setLastBackupAt] = useState<number | null>(null);
   const [busy, setBusy] = useState<'export' | 'pick' | 'restore' | null>(null);
   const [pendingBackup, setPendingBackup] = useState<BackupFile | null>(null);
 
   const loadSummary = useCallback(() => {
-    getStorageSummary()
-      .then(setSummary)
+    Promise.all([getStorageSummary(), getNoticeState()])
+      .then(([storage, notices]) => {
+        setSummary(storage);
+        setLastBackupAt(notices.lastBackupAt);
+      })
       .catch((error: unknown) => console.warn('Falha ao calcular armazenamento.', error));
   }, []);
 
@@ -89,6 +94,7 @@ export function DataSettings({ onFeedback, onRestored }: DataSettingsProps) {
     setBusy('export');
     try {
       await exportBackup();
+      loadSummary();
     } catch (error: unknown) {
       showError(error, 'Não foi possível exportar o backup.');
     } finally {
@@ -137,6 +143,11 @@ export function DataSettings({ onFeedback, onRestored }: DataSettingsProps) {
       <AppText variant="label">Dados</AppText>
       <View style={[styles.card, { backgroundColor: colors.surface, borderColor: colors.border }]}>
         <AppText>{summary ? describeStorage(summary) : 'Calculando armazenamento…'}</AppText>
+        <AppText color="secondary" style={styles.lastBackup} variant="caption">
+          {lastBackupAt === null
+            ? 'Nenhum backup exportado ainda.'
+            : `Último backup: ${formatDateKey(toDateKey(new Date(lastBackupAt)))}`}
+        </AppText>
       </View>
       <OutlineButton label="Exportar backup" loading={busy === 'export'} onPress={() => void handleExport()} />
       <OutlineButton label="Restaurar backup" loading={busy === 'pick'} onPress={() => void handlePick()} />
@@ -176,6 +187,9 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     borderWidth: 1,
     padding: 14,
+  },
+  lastBackup: {
+    marginTop: 4,
   },
   pressed: {
     opacity: 0.7,

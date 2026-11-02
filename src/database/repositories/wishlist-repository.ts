@@ -232,6 +232,7 @@ export async function registerPurchaseExpense(id: string): Promise<'created' | '
       date: toDateKey(new Date()),
       installmentCount: 1,
       recurring: false,
+      recurrenceEndDate: null,
       status: 'confirmed',
     });
 

@@ -14,6 +14,8 @@ export type MonthSummary = {
   /** Planned expenses in the month — shown apart, never added to expenseCents. */
   plannedExpenseCents: number;
   byCategory: CategoryTotal[];
+  /** Confirmed income per category, largest first. */
+  byIncomeCategory: CategoryTotal[];
   byPaymentMethod: Map<string, number>;
   /** Planned amounts and recurring occurrences, by due date. */
   upcoming: MonthEntry[];
@@ -49,11 +51,19 @@ export function entriesInMonth(entries: MonthEntry[], month: MonthRange): MonthE
   return entries.filter((entry) => entry.dueDate >= month.start && entry.dueDate <= month.end);
 }
 
+function addToCategory(totals: Map<string, CategoryTotal>, entry: MonthEntry): void {
+  const key = entry.categoryId ?? 'none';
+  const total = totals.get(key) ?? { categoryId: entry.categoryId, name: entry.categoryName ?? 'Sem categoria', amountCents: 0 };
+  total.amountCents += entry.amountCents;
+  totals.set(key, total);
+}
+
 export function summarizeMonth(entries: MonthEntry[]): MonthSummary {
   let incomeCents = 0;
   let expenseCents = 0;
   let plannedExpenseCents = 0;
   const categories = new Map<string, CategoryTotal>();
+  const incomeCategories = new Map<string, CategoryTotal>();
   const byPaymentMethod = new Map<string, number>();
 
   for (const entry of entries) {
@@ -63,18 +73,12 @@ export function summarizeMonth(entries: MonthEntry[]): MonthSummary {
     }
     if (entry.type === 'income') {
       incomeCents += entry.amountCents;
+      addToCategory(incomeCategories, entry);
       continue;
     }
 
     expenseCents += entry.amountCents;
-    const categoryKey = entry.categoryId ?? 'none';
-    const category = categories.get(categoryKey) ?? {
-      categoryId: entry.categoryId,
-      name: entry.categoryName ?? 'Sem categoria',
-      amountCents: 0,
-    };
-    category.amountCents += entry.amountCents;
-    categories.set(categoryKey, category);
+    addToCategory(categories, entry);
     if (entry.paymentMethodId) {
       byPaymentMethod.set(entry.paymentMethodId, (byPaymentMethod.get(entry.paymentMethodId) ?? 0) + entry.amountCents);
     }
@@ -86,6 +90,7 @@ export function summarizeMonth(entries: MonthEntry[]): MonthSummary {
     balanceCents: incomeCents - expenseCents,
     plannedExpenseCents,
     byCategory: [...categories.values()].sort((a, b) => b.amountCents - a.amountCents),
+    byIncomeCategory: [...incomeCategories.values()].sort((a, b) => b.amountCents - a.amountCents),
     byPaymentMethod,
     upcoming: entries.filter((entry) => entry.status === 'planned' || entry.recurring),
   };
