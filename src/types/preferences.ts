@@ -23,3 +23,15 @@ export const defaultProfilePreferences: ProfilePreferences = {
   preferredName: '',
   onboardingCompleted: false,
 };
+
+export type NotificationPreferences = {
+  taskReminders: boolean;
+  billReminders: boolean;
+  goalProgress: boolean;
+};
+
+export const defaultNotificationPreferences: NotificationPreferences = {
+  taskReminders: true,
+  billReminders: true,
+  goalProgress: false,
+};

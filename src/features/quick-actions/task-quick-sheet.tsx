@@ -1,5 +1,5 @@
 import { randomUUID } from 'expo-crypto';
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Pressable, StyleSheet, View } from 'react-native';
 
 import {
@@ -25,6 +25,7 @@ import {
   type QuickSheetProps,
 } from '@/features/quick-actions/use-form-options';
 import { createTask, type ReminderOutcome } from '@/features/tasks/create-task';
+import { getNotificationPreferences } from '@/database/repositories/preferences-repository';
 import { ensureReminderPermission } from '@/services/notifications/task-reminders';
 import type { Priority } from '@/types/tasks';
 import { combineDateAndTime, toDateKey, type TimeKey } from '@/utils/date';
@@ -34,7 +35,25 @@ const successMessages: Record<ReminderOutcome, string> = {
   scheduled: 'Tarefa salva com lembrete.',
   denied: 'Tarefa salva. O lembrete não foi agendado porque as notificações estão desativadas.',
   failed: 'Tarefa salva, mas não foi possível agendar o lembrete.',
+  disabled: 'Tarefa salva. Lembretes de tarefas estão desativados em Configurações.',
 };
+
+/** Whether "Lembretes de tarefas" is on in Configurações (assumed on until loaded). */
+function useTaskRemindersSetting(): boolean {
+  const [allowed, setAllowed] = useState(true);
+  useEffect(() => {
+    let active = true;
+    getNotificationPreferences()
+      .then((preferences) => {
+        if (active) setAllowed(preferences.taskReminders);
+      })
+      .catch(() => undefined);
+    return () => {
+      active = false;
+    };
+  }, []);
+  return allowed;
+}
 
 function TaskForm({ onSaved }: { onSaved: QuickSheetProps['onSaved'] }) {
   const [taskId] = useState(() => randomUUID());
@@ -54,9 +73,10 @@ function TaskForm({ onSaved }: { onSaved: QuickSheetProps['onSaved'] }) {
   const savingRef = useRef(false);
   const { categories, addCategory } = useCategories('task');
   const now = useNow(30_000);
+  const remindersAllowed = useTaskRemindersSetting();
 
   const reminderDate = dueTime ? combineDateAndTime(dueDate, dueTime) : null;
-  const canRemind = reminderDate !== null && reminderDate.getTime() > now;
+  const canRemind = remindersAllowed && reminderDate !== null && reminderDate.getTime() > now;
   const reminderActive = reminder && canRemind;
 
   useBottomSheetDirty(
@@ -185,7 +205,13 @@ function TaskForm({ onSaved }: { onSaved: QuickSheetProps['onSaved'] }) {
         <View style={styles.group}>
           <ToggleGroup>
             <ToggleField
-              description={canRemind ? 'Notificação no horário definido' : 'Defina um horário futuro para ativar'}
+              description={
+                !remindersAllowed
+                  ? 'Desativado em Configurações'
+                  : canRemind
+                    ? 'Notificação no horário definido'
+                    : 'Defina um horário futuro para ativar'
+              }
               disabled={!canRemind}
               label="Lembrete local"
               onChange={(enabled) => void toggleReminder(enabled)}

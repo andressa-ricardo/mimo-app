@@ -3,6 +3,7 @@ import {
   IosAuthorizationStatus,
   SchedulableTriggerInputTypes,
   cancelScheduledNotificationAsync,
+  getAllScheduledNotificationsAsync,
   getPermissionsAsync,
   requestPermissionsAsync,
   scheduleNotificationAsync,
@@ -13,6 +14,10 @@ import {
 import { Platform } from "react-native";
 
 const TASK_CHANNEL_ID = "task-reminders";
+export const BILL_CHANNEL_ID = "bill-reminders";
+
+export const TASK_REMINDER_KIND = "task-reminder";
+export const BILL_REMINDER_KIND = "bill-reminder";
 
 export type ReminderPermission = "granted" | "denied" | "unavailable";
 
@@ -35,18 +40,24 @@ function isGranted(status: NotificationPermissionsStatus): boolean {
   );
 }
 
-/** Creates the Android channel (required before the prompt on Android 13+) and asks once. */
+async function ensureChannels(): Promise<void> {
+  if (Platform.OS !== "android") return;
+  await setNotificationChannelAsync(TASK_CHANNEL_ID, {
+    name: "Lembretes de tarefas",
+    importance: AndroidImportance.HIGH,
+  });
+  await setNotificationChannelAsync(BILL_CHANNEL_ID, {
+    name: "Vencimentos de contas",
+    importance: AndroidImportance.DEFAULT,
+  });
+}
+
+/** Creates the Android channels (required before the prompt on Android 13+) and asks once. */
 export async function ensureReminderPermission(): Promise<ReminderPermission> {
   if (Platform.OS === "web") return "unavailable";
 
   try {
-    if (Platform.OS === "android") {
-      await setNotificationChannelAsync(TASK_CHANNEL_ID, {
-        name: "Lembretes de tarefas",
-        importance: AndroidImportance.HIGH,
-      });
-    }
-
+    await ensureChannels();
     const current = await getPermissionsAsync();
     if (isGranted(current)) return "granted";
     if (!current.canAskAgain) return "denied";
@@ -58,6 +69,18 @@ export async function ensureReminderPermission(): Promise<ReminderPermission> {
   }
 }
 
+/** True only when notifications are already allowed — never shows a prompt. */
+export async function hasNotificationPermission(): Promise<boolean> {
+  if (Platform.OS === "web") return false;
+  try {
+    const granted = isGranted(await getPermissionsAsync());
+    if (granted) await ensureChannels();
+    return granted;
+  } catch {
+    return false;
+  }
+}
+
 /** Resolves with the notification identifier only if scheduling succeeded. */
 export async function scheduleTaskReminder(
   taskId: string,
@@ -65,7 +88,11 @@ export async function scheduleTaskReminder(
   date: Date,
 ): Promise<string> {
   return scheduleNotificationAsync({
-    content: { title: "Lembrete de tarefa", body: title, data: { taskId } },
+    content: {
+      title: "Lembrete de tarefa",
+      body: title,
+      data: { kind: TASK_REMINDER_KIND, taskId },
+    },
     trigger: {
       type: SchedulableTriggerInputTypes.DATE,
       date,
@@ -78,4 +105,20 @@ export async function cancelTaskReminder(
   notificationId: string,
 ): Promise<void> {
   await cancelScheduledNotificationAsync(notificationId);
+}
+
+/**
+ * Cancels every scheduled notification of a kind. Task reminders created
+ * before `kind` existed are recognized by their `taskId`.
+ */
+export async function cancelScheduledByKind(kind: string): Promise<void> {
+  if (Platform.OS === "web") return;
+  const scheduled = await getAllScheduledNotificationsAsync();
+  for (const notification of scheduled) {
+    const data = notification.content.data as Record<string, unknown> | null;
+    const matches =
+      data?.kind === kind ||
+      (kind === TASK_REMINDER_KIND && data?.kind === undefined && typeof data?.taskId === "string");
+    if (matches) await cancelScheduledNotificationAsync(notification.identifier);
+  }
 }

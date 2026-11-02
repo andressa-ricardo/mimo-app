@@ -5,6 +5,7 @@ import {
   getAppearancePreferences,
   getProfilePreferences,
 } from '@/database/repositories/preferences-repository';
+import { startNotificationSync } from '@/services/notifications/notification-sync';
 import { configureNotifications } from '@/services/notifications/task-reminders';
 import { initializeAppDirectories } from '@/services/storage/app-directories';
 import {
@@ -39,6 +40,7 @@ export function useAppBootstrap(): BootstrapState {
         await initializeDatabase();
         initializeAppDirectories();
         configureNotifications();
+        startNotificationSync();
         const [appearance, profile] = await Promise.all([
           getAppearancePreferences(),
           getProfilePreferences(),

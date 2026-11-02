@@ -1,9 +1,19 @@
-import { useState } from 'react';
+import Constants from 'expo-constants';
+import { useCallback, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, TextInput, View } from 'react-native';
 
 import { AppText } from '@/components/ui/app-text';
 import { ScreenHeader } from '@/components/ui/screen-header';
+import { Toast, type ToastMessage } from '@/components/ui/toast';
+import {
+  getAppearancePreferences,
+  getProfilePreferences,
+} from '@/database/repositories/preferences-repository';
 import { AppearanceControls } from '@/features/settings/components/appearance-controls';
+import { DataSettings } from '@/features/settings/components/data-settings';
+import { NotificationSettings } from '@/features/settings/components/notification-settings';
+import { notifyDataChanged } from '@/services/events/data-events';
+import { syncAllReminders } from '@/services/notifications/notification-sync';
 import { useAppTheme } from '@/theme/theme-provider';
 import type { AccentColor, ColorSchemePreference } from '@/types/preferences';
 
@@ -13,7 +23,26 @@ export default function SettingsScreen() {
   const [feedback, setFeedback] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   const [isNameFocused, setIsNameFocused] = useState(false);
+  const [toast, setToast] = useState<ToastMessage | null>(null);
   const normalizedName = name.trim();
+  const appVersion = Constants.expoConfig?.version ?? '1.0.0';
+
+  const showToast = useCallback((text: string) => setToast({ id: Date.now(), text }), []);
+  const hideToast = useCallback(() => setToast(null), []);
+
+  /** After a restore: apply the restored theme/name and refresh every screen. */
+  const handleRestored = useCallback(async () => {
+    const [appearance, restoredProfile] = await Promise.all([getAppearancePreferences(), getProfilePreferences()]);
+    await updatePreferences(appearance);
+    if (restoredProfile.preferredName) {
+      await setPreferredName(restoredProfile.preferredName);
+      setName(restoredProfile.preferredName);
+    }
+    notifyDataChanged('tasks');
+    notifyDataChanged('finance');
+    notifyDataChanged('wishlist');
+    await syncAllReminders();
+  }, [setPreferredName, updatePreferences]);
 
   async function updateAppearance(
     change: Partial<{ accentColor: AccentColor; colorScheme: ColorSchemePreference }>,
@@ -43,7 +72,7 @@ export default function SettingsScreen() {
 
   return (
     <View style={[styles.screen, { backgroundColor: colors.background }]}>
-      <ScreenHeader title="Ajustes" />
+      <ScreenHeader title="Configurações" />
       <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
         <View style={[styles.card, { backgroundColor: colors.surface, borderColor: colors.border }]}>
           <AppText variant="section">Como podemos te chamar?</AppText>
@@ -98,7 +127,15 @@ export default function SettingsScreen() {
             {feedback}
           </AppText>
         ) : null}
+
+        <NotificationSettings onFeedback={showToast} />
+        <DataSettings onFeedback={showToast} onRestored={handleRestored} />
+
+        <AppText color="secondary" style={styles.footer} variant="caption">
+          Mimo · versão {appVersion} · dados salvos apenas neste dispositivo
+        </AppText>
       </ScrollView>
+      <Toast message={toast} onHide={hideToast} />
     </View>
   );
 }
@@ -121,6 +158,10 @@ const styles = StyleSheet.create({
     opacity: 0.45,
   },
   feedback: {
+    textAlign: 'center',
+  },
+  footer: {
+    marginTop: 8,
     textAlign: 'center',
   },
   helper: {

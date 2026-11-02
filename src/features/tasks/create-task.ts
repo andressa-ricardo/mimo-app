@@ -1,3 +1,4 @@
+import { getNotificationPreferences } from '@/database/repositories/preferences-repository';
 import { insertTask, setTaskReminder } from '@/database/repositories/tasks-repository';
 import { notifyDataChanged } from '@/services/events/data-events';
 import {
@@ -8,7 +9,7 @@ import {
 import type { NewTaskInput } from '@/types/tasks';
 import { combineDateAndTime } from '@/utils/date';
 
-export type ReminderOutcome = 'none' | 'scheduled' | 'denied' | 'failed';
+export type ReminderOutcome = 'none' | 'scheduled' | 'denied' | 'failed' | 'disabled';
 
 /**
  * Saves the task first, then tries to schedule the reminder. A reminder
@@ -19,6 +20,7 @@ export async function createTask(input: NewTaskInput, withReminder: boolean): Pr
   notifyDataChanged('tasks');
 
   if (!withReminder || input.dueTime === null) return 'none';
+  if (!(await getNotificationPreferences()).taskReminders) return 'disabled';
 
   const reminderDate = combineDateAndTime(input.dueDate, input.dueTime);
   if (reminderDate.getTime() <= Date.now()) return 'failed';
