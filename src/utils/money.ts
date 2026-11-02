@@ -40,3 +40,9 @@ export function splitInstallments(totalCents: number, count: number): number[] {
   const base = (totalCents - remainder) / count;
   return Array.from({ length: count }, (_, index) => base + (index < remainder ? 1 : 0));
 }
+
+/** Whole-number percentage without floating-point money math (rounds half up). */
+export function percentOf(partCents: number, totalCents: number): number {
+  if (totalCents <= 0) return 0;
+  return Math.floor((partCents * 100 + Math.floor(totalCents / 2)) / totalCents);
+}

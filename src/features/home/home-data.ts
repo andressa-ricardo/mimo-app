@@ -1,12 +1,14 @@
 import { getDatabase } from '@/database/client';
 import { getConfirmedTotal, listBudgets } from '@/database/repositories/finance-repository';
+import { listGoals } from '@/database/repositories/goals-repository';
 import { WISHLIST_FILE_OWNER } from '@/database/repositories/wishlist-repository';
-import type { HomeSummary, HomeTask, HomeWishlistItem } from '@/features/home/home-types';
+import type { HomeGoal, HomeSummary, HomeTask, HomeWishlistItem } from '@/features/home/home-types';
 import { storedImageUri } from '@/services/images/image-storage';
 import { getMonthRange, parseDateKey, toDateKey, toTimeKey, type DateKey } from '@/utils/date';
 
 const HOME_TASK_LIMIT = 5;
 const HOME_WISHLIST_LIMIT = 8;
+const HOME_GOAL_LIMIT = 3;
 
 type TaskRow = {
   id: string;
@@ -86,6 +88,21 @@ async function loadWishlist(): Promise<HomeWishlistItem[]> {
   }));
 }
 
+/** Goals in progress first, then completed ones; archived goals stay off the Home. */
+async function loadGoals(): Promise<HomeGoal[]> {
+  const goals = (await listGoals()).filter((goal) => goal.status !== 'archived');
+  return goals
+    .sort((a, b) => Number(a.status === 'completed') - Number(b.status === 'completed'))
+    .slice(0, HOME_GOAL_LIMIT)
+    .map((goal) => ({
+      id: goal.id,
+      title: goal.title,
+      currentAmountCents: goal.savedAmountCents,
+      targetAmountCents: goal.targetAmountCents,
+      icon: goal.icon,
+    }));
+}
+
 /**
  * Aggregation boundary for the Home screen. Each module contributes a small,
  * limited query; modules without a schema yet return explicit empty lists.
@@ -93,11 +110,12 @@ async function loadWishlist(): Promise<HomeWishlistItem[]> {
 export async function loadHomeSummary(): Promise<HomeSummary> {
   const now = new Date();
   const month = getMonthRange(now);
-  const [expenseCents, budgets, tasks, wishlist] = await Promise.all([
+  const [expenseCents, budgets, tasks, wishlist, goals] = await Promise.all([
     getConfirmedTotal('expense', month.start, month.end),
     listBudgets(),
     loadTasks(now),
     loadWishlist(),
+    loadGoals(),
   ]);
   const budgetCents = budgets.reduce((total, budget) => total + budget.amountCents, 0);
 
@@ -106,6 +124,6 @@ export async function loadHomeSummary(): Promise<HomeSummary> {
     tasks,
     plans: [],
     wishlist,
-    goals: [],
+    goals,
   };
 }

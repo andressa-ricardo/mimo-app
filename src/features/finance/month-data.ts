@@ -107,9 +107,3 @@ export function budgetProgress(budgets: Budget[], summary: MonthSummary): Budget
     spentCents: summary.byCategory.find((category) => category.categoryId === budget.categoryId)?.amountCents ?? 0,
   }));
 }
-
-/** Whole-number percentage without floating-point money math (rounds half up). */
-export function percentOf(partCents: number, totalCents: number): number {
-  if (totalCents <= 0) return 0;
-  return Math.floor((partCents * 100 + Math.floor(totalCents / 2)) / totalCents);
-}

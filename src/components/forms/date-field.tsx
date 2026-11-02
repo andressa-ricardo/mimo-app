@@ -76,3 +76,79 @@ export const pickerFieldStyles = StyleSheet.create({
 });
 
 const styles = pickerFieldStyles;
+
+type OptionalDateFieldProps = {
+  containerStyle?: StyleProp<ViewStyle>;
+  label: string;
+  onChange: (value: DateKey | null) => void;
+  placeholder?: string;
+  value: DateKey | null;
+};
+
+/** Date that can be left empty: shows a placeholder until chosen, with a clear button once set. */
+export function OptionalDateField({
+  containerStyle,
+  label,
+  onChange,
+  placeholder = 'Sem data',
+  value,
+}: OptionalDateFieldProps) {
+  const { colors } = useAppTheme();
+
+  if (value !== null) {
+    return (
+      <View style={containerStyle}>
+        <DateField label={label} onChange={onChange} value={value} />
+        <Pressable
+          accessibilityLabel={`Remover ${label.toLowerCase()}`}
+          accessibilityRole="button"
+          hitSlop={10}
+          onPress={() => onChange(null)}
+          style={optionalStyles.clear}>
+          <Ionicons color={colors.textSecondary} name="close-circle" size={18} />
+        </Pressable>
+      </View>
+    );
+  }
+
+  const open = () => {
+    const today = new Date();
+    if (Platform.OS === 'ios') {
+      onChange(toDateKey(today));
+      return;
+    }
+    DateTimePickerAndroid.open({
+      mode: 'date',
+      value: today,
+      onValueChange: (_, selected) => onChange(toDateKey(selected)),
+    });
+  };
+
+  return (
+    <FormField label={label} style={containerStyle}>
+      <Pressable
+        accessibilityHint="Abre o calendário"
+        accessibilityLabel={`${label}: ${placeholder}`}
+        accessibilityRole="button"
+        onPress={open}
+        style={({ pressed }) => [
+          inputStyles.box,
+          styles.box,
+          { backgroundColor: colors.surface, borderColor: colors.border },
+          pressed && styles.pressed,
+        ]}>
+        <AppText color="secondary">{placeholder}</AppText>
+        <Ionicons color={colors.textSecondary} name="calendar-outline" size={17} />
+      </Pressable>
+    </FormField>
+  );
+}
+
+const optionalStyles = StyleSheet.create({
+  clear: {
+    position: 'absolute',
+    right: 40,
+    // Vertically centered on the 46px input below the label.
+    top: 36,
+  },
+});

@@ -15,6 +15,7 @@ import {
   registerPurchaseExpense,
   setWishlistPurchased,
 } from '@/database/repositories/wishlist-repository';
+import { WishlistGoalSection } from '@/features/goals/components/wishlist-goal-section';
 import { WishlistQuickSheet } from '@/features/quick-actions/wishlist-quick-sheet';
 import { useWishlistItem } from '@/features/wishlist/use-wishlist';
 import { priorityColor, priorityLabels } from '@/theme/priority';
@@ -263,6 +264,8 @@ export function WishlistDetailScreen() {
             <AppText>{item.notes}</AppText>
           </View>
         ) : null}
+
+        <WishlistGoalSection item={item} onFeedback={showToast} />
 
         {purchased ? (
           <View style={styles.actions}>

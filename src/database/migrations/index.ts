@@ -205,4 +205,70 @@ export const migrations: readonly Migration[] = [
       `);
     },
   },
+  {
+    version: 5,
+    name: 'create_savings_goals',
+    migrate: async (database) => {
+      // Goal categories get their own table: widening the CHECK on `categories`
+      // would require rebuilding it, and dropping it would cascade into budgets.
+      await database.execAsync(`
+        CREATE TABLE goal_categories (
+          id TEXT PRIMARY KEY NOT NULL,
+          name TEXT NOT NULL CHECK (length(trim(name)) BETWEEN 1 AND 40),
+          sort_order INTEGER NOT NULL DEFAULT 0,
+          is_system INTEGER NOT NULL DEFAULT 0 CHECK (is_system IN (0, 1)),
+          archived_at INTEGER,
+          created_at INTEGER NOT NULL
+        );
+
+        CREATE UNIQUE INDEX goal_categories_name_idx ON goal_categories(name COLLATE NOCASE);
+
+        -- Saved balance and status are derived (from goal_movements and the
+        -- target), never stored, so they cannot drift out of sync.
+        CREATE TABLE savings_goals (
+          id TEXT PRIMARY KEY NOT NULL,
+          title TEXT NOT NULL CHECK (length(trim(title)) > 0),
+          description TEXT,
+          target_amount_cents INTEGER NOT NULL CHECK (target_amount_cents > 0),
+          target_date TEXT CHECK (target_date IS NULL OR target_date GLOB '[0-9][0-9][0-9][0-9]-[0-1][0-9]-[0-3][0-9]'),
+          icon TEXT,
+          category_id TEXT REFERENCES goal_categories(id) ON DELETE SET NULL,
+          archived_at INTEGER,
+          linked_wishlist_item_id TEXT REFERENCES wishlist_items(id) ON DELETE SET NULL,
+          -- Plans has no table yet; the reference becomes a foreign key when it does.
+          linked_plan_id TEXT,
+          created_at INTEGER NOT NULL,
+          updated_at INTEGER NOT NULL
+        );
+
+        CREATE INDEX savings_goals_wishlist_idx ON savings_goals(linked_wishlist_item_id);
+
+        CREATE TABLE goal_movements (
+          id TEXT PRIMARY KEY NOT NULL,
+          goal_id TEXT NOT NULL REFERENCES savings_goals(id) ON DELETE CASCADE,
+          type TEXT NOT NULL CHECK (type IN ('contribution', 'withdrawal')),
+          amount_cents INTEGER NOT NULL CHECK (amount_cents > 0),
+          movement_date TEXT NOT NULL CHECK (movement_date GLOB '[0-9][0-9][0-9][0-9]-[0-1][0-9]-[0-3][0-9]'),
+          note TEXT,
+          created_at INTEGER NOT NULL,
+          updated_at INTEGER NOT NULL
+        );
+
+        CREATE INDEX goal_movements_goal_idx ON goal_movements(goal_id, movement_date);
+      `);
+
+      const now = Date.now();
+      const names = ['Viagem', 'Compras', 'Emergência', 'Estudos', 'Casa', 'Outros'];
+      for (const [index, name] of names.entries()) {
+        await database.runAsync(
+          `INSERT OR IGNORE INTO goal_categories (id, name, sort_order, is_system, created_at)
+           VALUES (?, ?, ?, 1, ?)`,
+          `system-goal-${index + 1}`,
+          name,
+          index,
+          now,
+        );
+      }
+    },
+  },
 ];

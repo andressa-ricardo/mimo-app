@@ -23,12 +23,13 @@ import { useAppTheme } from '@/theme/theme-provider';
 export type SelectOption = { value: string; label: string; group?: string };
 
 type SelectFieldProps = {
-  addLabel: string;
-  addPlaceholder: string;
+  /** Omit addLabel/onAdd to hide the "+ add" row. */
+  addLabel?: string;
+  addPlaceholder?: string;
   containerStyle?: StyleProp<ViewStyle>;
   label: string;
   noneLabel: string;
-  onAdd: (name: string) => Promise<string>;
+  onAdd?: (name: string) => Promise<string>;
   onChange: (value: string | null) => void;
   options: SelectOption[];
   value: string | null;
@@ -180,13 +181,13 @@ export function SelectField({
                 </Fragment>
               );
             })}
-            <View style={[styles.divider, { backgroundColor: colors.border }]} />
-            {adding ? (
+            {addLabel && onAdd ? <View style={[styles.divider, { backgroundColor: colors.border }]} /> : null}
+            {!addLabel || !onAdd ? null : adding ? (
               <View style={styles.addRow}>
                 <InlineAddInput
                   onCancel={() => setAdding(false)}
                   onSubmit={async (name) => choose(await onAdd(name))}
-                  placeholder={addPlaceholder}
+                  placeholder={addPlaceholder ?? addLabel}
                 />
               </View>
             ) : (

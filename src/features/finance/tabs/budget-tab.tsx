@@ -4,12 +4,13 @@ import { Pressable, StyleSheet, View } from 'react-native';
 import { AppText } from '@/components/ui/app-text';
 import { BudgetSheet } from '@/features/finance/components/budget-sheet';
 import { EmptyNote, ProgressBar, SectionHeader } from '@/features/finance/components/finance-ui';
-import { budgetProgress, percentOf } from '@/features/finance/month-data';
+import { budgetProgress } from '@/features/finance/month-data';
 import type { FinanceMonthData } from '@/features/finance/use-finance-month';
 import { categoryColor } from '@/theme/category-colors';
 import { useAppTheme } from '@/theme/theme-provider';
 import type { Budget } from '@/types/finance';
 import { formatCurrency } from '@/utils/format';
+import { percentOf } from '@/utils/money';
 
 type SheetState = { open: false } | { open: true; budget: Budget | null };
 

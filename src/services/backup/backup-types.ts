@@ -15,6 +15,9 @@ export const BACKUP_TABLES = [
   'tasks',
   'wishlist_items',
   'file_references',
+  'goal_categories',
+  'savings_goals',
+  'goal_movements',
 ] as const;
 
 export type BackupTable = (typeof BACKUP_TABLES)[number];

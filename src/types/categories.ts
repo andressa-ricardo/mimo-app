@@ -1,4 +1,5 @@
-export type CategoryScope = 'task' | 'expense' | 'income' | 'wishlist';
+/** 'goal' categories live in their own table (see migration 5). */
+export type CategoryScope = 'task' | 'expense' | 'income' | 'wishlist' | 'goal';
 
 export type Category = {
   id: string;

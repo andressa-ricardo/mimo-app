@@ -21,6 +21,7 @@ import type {
   HomeTask,
   HomeWishlistItem,
 } from '@/features/home/home-types';
+import { goalProgress } from '@/features/goals/goal-math';
 import { useHomeSummary } from '@/features/home/use-home-summary';
 import { TaskQuickSheet } from '@/features/quick-actions/task-quick-sheet';
 import { TransactionQuickSheet } from '@/features/quick-actions/transaction-quick-sheet';
@@ -325,30 +326,33 @@ function GoalList({ goals }: { goals: HomeGoal[] }) {
   return (
     <View style={[styles.goalsCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
       {goals.map((goal) => {
-        const progress =
-          goal.targetAmountCents > 0
-            ? Math.min(goal.currentAmountCents / goal.targetAmountCents, 1)
-            : 0;
+        const progress = goalProgress(goal.currentAmountCents, goal.targetAmountCents);
         return (
-          <View key={goal.id} style={styles.goalRow}>
+          <Pressable
+            accessibilityHint="Abre a meta"
+            accessibilityLabel={`${goal.title}, ${progress.percent}%`}
+            accessibilityRole="button"
+            key={goal.id}
+            onPress={() => router.push({ pathname: '/goals/[id]', params: { id: goal.id } })}
+            style={({ pressed }) => [styles.goalRow, pressed && styles.pressed]}>
             <View style={styles.goalHeading}>
-              <AppText numberOfLines={1} variant="label">
+              <AppText numberOfLines={1} style={styles.goalTitle} variant="label">
                 {goal.icon ? `${goal.icon} ` : ''}
                 {goal.title}
               </AppText>
               <AppText color="secondary" variant="caption">
-                {Math.round(progress * 100)}%
+                {progress.percent}%
               </AppText>
             </View>
             <View style={[styles.goalTrack, { backgroundColor: colors.accentSoft }]}>
               <View
                 style={[
                   styles.goalFill,
-                  { backgroundColor: colors.accent, width: `${progress * 100}%` },
+                  { backgroundColor: colors.accent, width: `${progress.fraction * 100}%` },
                 ]}
               />
             </View>
-          </View>
+          </Pressable>
         );
       })}
     </View>
@@ -591,7 +595,11 @@ const styles = StyleSheet.create({
   },
   goalHeading: {
     flexDirection: 'row',
+    gap: 8,
     justifyContent: 'space-between',
+  },
+  goalTitle: {
+    flexShrink: 1,
   },
   goalRow: {
     gap: 7,

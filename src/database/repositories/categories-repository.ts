@@ -19,6 +19,13 @@ function sameName(a: string, b: string): boolean {
 
 export async function listCategories(scope: CategoryScope): Promise<Category[]> {
   const database = await getDatabase();
+  if (scope === 'goal') {
+    return database.getAllAsync<Category>(
+      `SELECT id, 'goal' AS scope, name FROM goal_categories
+       WHERE archived_at IS NULL
+       ORDER BY is_system DESC, sort_order, created_at`,
+    );
+  }
   return database.getAllAsync<Category>(
     `SELECT id, scope, name FROM categories
      WHERE scope = ? AND archived_at IS NULL
@@ -35,6 +42,16 @@ export async function createCategory(scope: CategoryScope, name: string): Promis
 
   const database = await getDatabase();
   const category: Category = { id: randomUUID(), scope, name: normalized };
+  if (scope === 'goal') {
+    await database.runAsync(
+      `INSERT INTO goal_categories (id, name, sort_order, is_system, created_at)
+       VALUES (?, ?, (SELECT COALESCE(MAX(sort_order), 0) + 1 FROM goal_categories), 0, ?)`,
+      category.id,
+      normalized,
+      Date.now(),
+    );
+    return category;
+  }
   await database.runAsync(
     `INSERT INTO categories (id, scope, name, sort_order, is_system, created_at)
      VALUES (?, ?, ?, (SELECT COALESCE(MAX(sort_order), 0) + 1 FROM categories WHERE scope = ?), 0, ?)`,
