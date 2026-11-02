@@ -1,0 +1,51 @@
+import { getSetting, setSetting } from '@/database/repositories/settings-repository';
+import {
+  accentColors,
+  colorSchemes,
+  defaultAppearancePreferences,
+  type AccentColor,
+  type AppearancePreferences,
+  type ColorSchemePreference,
+} from '@/types/preferences';
+
+const APPEARANCE_KEY = 'appearance';
+
+function isColorScheme(value: string | null): value is ColorSchemePreference {
+  return colorSchemes.some((option) => option === value);
+}
+
+function isAccentColor(value: string | null): value is AccentColor {
+  return accentColors.some((option) => option === value);
+}
+
+export async function getAppearancePreferences(): Promise<AppearancePreferences> {
+  const storedValue = await getSetting(APPEARANCE_KEY);
+
+  if (!storedValue) return defaultAppearancePreferences;
+
+  try {
+    const parsed: unknown = JSON.parse(storedValue);
+    if (typeof parsed !== 'object' || parsed === null) return defaultAppearancePreferences;
+
+    const { colorScheme, accentColor } = parsed as Record<string, unknown>;
+    const validColorScheme = typeof colorScheme === 'string' ? colorScheme : null;
+    const validAccentColor = typeof accentColor === 'string' ? accentColor : null;
+
+    return {
+      colorScheme: isColorScheme(validColorScheme)
+        ? validColorScheme
+        : defaultAppearancePreferences.colorScheme,
+      accentColor: isAccentColor(validAccentColor)
+        ? validAccentColor
+        : defaultAppearancePreferences.accentColor,
+    };
+  } catch {
+    return defaultAppearancePreferences;
+  }
+}
+
+export async function saveAppearancePreferences(
+  preferences: AppearancePreferences,
+): Promise<void> {
+  await setSetting(APPEARANCE_KEY, JSON.stringify(preferences));
+}
