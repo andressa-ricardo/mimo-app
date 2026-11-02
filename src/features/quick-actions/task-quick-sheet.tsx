@@ -24,10 +24,10 @@ import {
   useNow,
   type QuickSheetProps,
 } from '@/features/quick-actions/use-form-options';
-import { createTask, type ReminderOutcome } from '@/features/tasks/create-task';
+import { createTask, editTask, type ReminderOutcome } from '@/features/tasks/create-task';
 import { getNotificationPreferences } from '@/database/repositories/preferences-repository';
 import { ensureReminderPermission, getExactAlarmStatus } from '@/services/notifications/task-reminders';
-import type { Priority } from '@/types/tasks';
+import type { Priority, TaskItem } from '@/types/tasks';
 import { combineDateAndTime, formatDateKey, toDateKey, type DateKey, type TimeKey } from '@/utils/date';
 
 const successMessages: Record<ReminderOutcome, string> = {
@@ -56,26 +56,46 @@ function useTaskRemindersSetting(): boolean {
 }
 
 /** Says exactly when the reminder fires, so a wrong AM/PM pick is obvious. */
-async function describeScheduledReminder(dueDate: DateKey, dueTime: TimeKey, today: DateKey): Promise<string> {
+async function describeScheduledReminder(
+  dueDate: DateKey,
+  dueTime: TimeKey,
+  today: DateKey,
+  verb: string,
+): Promise<string> {
   const day = dueDate === today ? 'hoje' : `em ${formatDateKey(dueDate)}`;
   const delayNote =
     (await getExactAlarmStatus()) === 'inexact'
       ? ' O Android pode entregá-lo alguns minutos depois — veja Configurações.'
       : '';
-  return `Tarefa salva. Lembrete ${day} às ${dueTime}.${delayNote}`;
+  return `Tarefa ${verb}. Lembrete ${day} às ${dueTime}.${delayNote}`;
 }
 
-function TaskForm({ onSaved }: { onSaved: QuickSheetProps['onSaved'] }) {
-  const [taskId] = useState(() => randomUUID());
-  const [initialDate] = useState(() => toDateKey(new Date()));
-  const [title, setTitle] = useState('');
-  const [dueDate, setDueDate] = useState(initialDate);
-  const [dueTime, setDueTime] = useState<TimeKey | null>(null);
-  const [priority, setPriority] = useState<Priority>('medium');
-  const [showDetails, setShowDetails] = useState(false);
-  const [description, setDescription] = useState('');
-  const [categoryId, setCategoryId] = useState<string | null>(null);
-  const [reminder, setReminder] = useState(false);
+type TaskFormProps = {
+  onSaved: QuickSheetProps['onSaved'];
+  /** When set, the form edits this task instead of creating one. */
+  task: TaskItem | null;
+};
+
+function TaskForm({ onSaved, task }: TaskFormProps) {
+  const [taskId] = useState(() => task?.id ?? randomUUID());
+  const [today] = useState(() => toDateKey(new Date()));
+  const [initial] = useState(() => ({
+    title: task?.title ?? '',
+    dueDate: task?.dueDate ?? today,
+    dueTime: task?.dueTime ?? null,
+    priority: task?.priority ?? ('medium' as Priority),
+    description: task?.description ?? '',
+    categoryId: task?.categoryId ?? null,
+    reminder: task?.reminderEnabled ?? false,
+  }));
+  const [title, setTitle] = useState(initial.title);
+  const [dueDate, setDueDate] = useState(initial.dueDate);
+  const [dueTime, setDueTime] = useState<TimeKey | null>(initial.dueTime);
+  const [priority, setPriority] = useState<Priority>(initial.priority);
+  const [showDetails, setShowDetails] = useState(Boolean(initial.description || initial.categoryId));
+  const [description, setDescription] = useState(initial.description);
+  const [categoryId, setCategoryId] = useState<string | null>(initial.categoryId);
+  const [reminder, setReminder] = useState(initial.reminder);
   const [reminderNotice, setReminderNotice] = useState<string | null>(null);
   const [titleError, setTitleError] = useState<string | null>(null);
   const [formError, setFormError] = useState<string | null>(null);
@@ -90,13 +110,13 @@ function TaskForm({ onSaved }: { onSaved: QuickSheetProps['onSaved'] }) {
   const reminderActive = reminder && canRemind;
 
   useBottomSheetDirty(
-    title.trim().length > 0 ||
-      description.trim().length > 0 ||
-      dueTime !== null ||
-      dueDate !== initialDate ||
-      priority !== 'medium' ||
-      categoryId !== null ||
-      reminder,
+    title.trim() !== initial.title ||
+      description.trim() !== initial.description ||
+      dueTime !== initial.dueTime ||
+      dueDate !== initial.dueDate ||
+      priority !== initial.priority ||
+      categoryId !== initial.categoryId ||
+      reminder !== initial.reminder,
   );
 
   const toggleReminder = async (enabled: boolean) => {
@@ -128,22 +148,21 @@ function TaskForm({ onSaved }: { onSaved: QuickSheetProps['onSaved'] }) {
     setSaving(true);
     setFormError(null);
     try {
-      const outcome = await createTask(
-        {
-          id: taskId,
-          title: normalizedTitle,
-          description: description.trim() || null,
-          categoryId,
-          dueDate,
-          dueTime,
-          priority,
-        },
-        reminderActive,
-      );
+      const input = {
+        id: taskId,
+        title: normalizedTitle,
+        description: description.trim() || null,
+        categoryId,
+        dueDate,
+        dueTime,
+        priority,
+      };
+      const outcome = task ? await editTask(input, reminderActive) : await createTask(input, reminderActive);
+      const verb = task ? 'atualizada' : 'salva';
       onSaved(
         outcome === 'scheduled' && dueTime
-          ? await describeScheduledReminder(dueDate, dueTime, initialDate)
-          : successMessages[outcome],
+          ? await describeScheduledReminder(dueDate, dueTime, today, verb)
+          : successMessages[outcome].replace('Tarefa salva', `Tarefa ${verb}`),
       );
     } catch (error: unknown) {
       setFormError(describeError(error, 'Não foi possível salvar a tarefa. Tente novamente.'));
@@ -156,7 +175,7 @@ function TaskForm({ onSaved }: { onSaved: QuickSheetProps['onSaved'] }) {
     <>
       <BottomSheetScrollView>
         <TextField
-          autoFocus
+          autoFocus={!task}
           error={titleError}
           maxLength={120}
           onChangeText={(text) => {
@@ -248,10 +267,12 @@ function TaskForm({ onSaved }: { onSaved: QuickSheetProps['onSaved'] }) {
   );
 }
 
-export function TaskQuickSheet({ onClose, onSaved, visible }: QuickSheetProps) {
+type TaskQuickSheetProps = QuickSheetProps & { task?: TaskItem | null };
+
+export function TaskQuickSheet({ onClose, onSaved, task = null, visible }: TaskQuickSheetProps) {
   return (
-    <BottomSheet onRequestClose={onClose} title="Nova tarefa" visible={visible}>
-      <TaskForm onSaved={onSaved} />
+    <BottomSheet onRequestClose={onClose} title={task ? 'Editar tarefa' : 'Nova tarefa'} visible={visible}>
+      <TaskForm onSaved={onSaved} task={task} />
     </BottomSheet>
   );
 }

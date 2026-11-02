@@ -1,6 +1,13 @@
 import { getNotificationPreferences } from '@/database/repositories/preferences-repository';
-import { insertTask, setTaskReminder } from '@/database/repositories/tasks-repository';
+import {
+  deleteTask,
+  insertTask,
+  setTaskCompleted,
+  setTaskReminder,
+  updateTask,
+} from '@/database/repositories/tasks-repository';
 import { notifyDataChanged } from '@/services/events/data-events';
+import { syncTaskRemindersNow } from '@/services/notifications/notification-sync';
 import {
   cancelTaskReminder,
   ensureReminderPermission,
@@ -40,4 +47,38 @@ export async function createTask(input: NewTaskInput, withReminder: boolean): Pr
     if (notificationId) await cancelTaskReminder(notificationId).catch(() => undefined);
     return 'failed';
   }
+}
+
+/**
+ * Saves edits, then rebuilds task notifications from SQLite so the reminder
+ * follows the new date/time (or disappears when turned off).
+ */
+export async function editTask(input: NewTaskInput, withReminder: boolean): Promise<ReminderOutcome> {
+  const wantsReminder = withReminder && input.dueTime !== null;
+  let outcome: ReminderOutcome = 'none';
+  if (wantsReminder) {
+    if (!(await getNotificationPreferences()).taskReminders) outcome = 'disabled';
+    else {
+      const permission = await ensureReminderPermission();
+      outcome = permission === 'granted' ? 'scheduled' : permission === 'denied' ? 'denied' : 'failed';
+    }
+  }
+
+  await updateTask(input, wantsReminder);
+  notifyDataChanged('tasks');
+  await syncTaskRemindersNow();
+  return outcome;
+}
+
+/** Completing a task cancels its reminder; reopening it reschedules a future one. */
+export async function toggleTaskCompleted(id: string, completed: boolean): Promise<void> {
+  await setTaskCompleted(id, completed);
+  notifyDataChanged('tasks');
+  await syncTaskRemindersNow();
+}
+
+export async function removeTask(id: string): Promise<void> {
+  await deleteTask(id);
+  notifyDataChanged('tasks');
+  await syncTaskRemindersNow();
 }

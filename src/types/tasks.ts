@@ -11,3 +11,11 @@ export type NewTaskInput = {
   dueTime: TimeKey | null;
   priority: Priority;
 };
+
+export type TaskItem = Omit<NewTaskInput, 'dueDate'> & {
+  dueDate: DateKey | null;
+  categoryName: string | null;
+  reminderEnabled: boolean;
+  completedAt: number | null;
+  createdAt: number;
+};

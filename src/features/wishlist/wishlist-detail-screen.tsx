@@ -17,7 +17,7 @@ import {
 } from '@/database/repositories/wishlist-repository';
 import { WishlistQuickSheet } from '@/features/quick-actions/wishlist-quick-sheet';
 import { useWishlistItem } from '@/features/wishlist/use-wishlist';
-import { priorityColor, priorityLabels } from '@/features/wishlist/wishlist-meta';
+import { priorityColor, priorityLabels } from '@/theme/priority';
 import { notifyDataChanged } from '@/services/events/data-events';
 import { useAppTheme } from '@/theme/theme-provider';
 import type { WishlistItem } from '@/types/wishlist';
