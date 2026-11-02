@@ -175,4 +175,34 @@ export const migrations: readonly Migration[] = [
       `);
     },
   },
+  {
+    version: 4,
+    name: 'add_payment_method_details_and_budgets',
+    migrate: async (database) => {
+      await database.execAsync(`
+        ALTER TABLE payment_methods ADD COLUMN kind TEXT NOT NULL DEFAULT 'other'
+          CHECK (kind IN ('credit', 'debit', 'pix', 'cash', 'other'));
+        ALTER TABLE payment_methods ADD COLUMN institution TEXT;
+        ALTER TABLE payment_methods ADD COLUMN due_day INTEGER
+          CHECK (due_day IS NULL OR due_day BETWEEN 1 AND 31);
+
+        -- Best-effort type for methods created before this migration.
+        UPDATE payment_methods SET kind = CASE
+          WHEN name LIKE '%cr_dito%' THEN 'credit'
+          WHEN name LIKE '%d_bito%' THEN 'debit'
+          WHEN name LIKE '%pix%' THEN 'pix'
+          WHEN name LIKE '%dinheiro%' THEN 'cash'
+          ELSE 'other'
+        END;
+
+        -- One monthly limit per expense category, applied to every month.
+        CREATE TABLE budgets (
+          category_id TEXT PRIMARY KEY NOT NULL REFERENCES categories(id) ON DELETE CASCADE,
+          amount_cents INTEGER NOT NULL CHECK (amount_cents > 0),
+          created_at INTEGER NOT NULL,
+          updated_at INTEGER NOT NULL
+        );
+      `);
+    },
+  },
 ];

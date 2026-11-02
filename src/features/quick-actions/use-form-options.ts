@@ -6,7 +6,7 @@ import {
   listCategories,
   listPaymentMethods,
 } from '@/database/repositories/categories-repository';
-import type { Category, CategoryScope, PaymentMethod } from '@/types/categories';
+import type { Category, CategoryScope, PaymentMethod, PaymentMethodDetails } from '@/types/categories';
 
 export type QuickSheetProps = {
   onClose: () => void;
@@ -62,8 +62,8 @@ export function usePaymentMethods() {
     };
   }, []);
 
-  const addMethod = useCallback(async (name: string) => {
-    const method = await createPaymentMethod(name);
+  const addMethod = useCallback(async (name: string, details?: Partial<PaymentMethodDetails>) => {
+    const method = await createPaymentMethod(name, details);
     setMethods((current) => (current.some((item) => item.id === method.id) ? current : [...current, method]));
     return method;
   }, []);

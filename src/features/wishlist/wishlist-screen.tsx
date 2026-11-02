@@ -20,7 +20,8 @@ import { FilterChip } from '@/components/ui/filter-chip';
 import { Toast, type ToastMessage } from '@/components/ui/toast';
 import { WishlistQuickSheet } from '@/features/quick-actions/wishlist-quick-sheet';
 import { useWishlistItems } from '@/features/wishlist/use-wishlist';
-import { categoryColor, priorityRank, searchable } from '@/features/wishlist/wishlist-meta';
+import { priorityRank, searchable } from '@/features/wishlist/wishlist-meta';
+import { categoryColor } from '@/theme/category-colors';
 import { useAppTheme } from '@/theme/theme-provider';
 import type { WishlistItem } from '@/types/wishlist';
 import { formatCurrency } from '@/utils/format';
@@ -38,7 +39,7 @@ const statusFilters: { value: StatusFilter; label: string }[] = [
 ];
 
 function WishlistCard({ item, width }: { item: WishlistItem; width: number }) {
-  const { colors } = useAppTheme();
+  const { colors, isDark } = useAppTheme();
 
   return (
     <Pressable
@@ -76,7 +77,7 @@ function WishlistCard({ item, width }: { item: WishlistItem; width: number }) {
         </AppText>
         {item.categoryId && item.categoryName ? (
           <View style={styles.categoryTag}>
-            <View style={[styles.categoryDot, { backgroundColor: categoryColor(item.categoryId) }]} />
+            <View style={[styles.categoryDot, { backgroundColor: categoryColor(item.categoryId, isDark) }]} />
             <AppText color="secondary" numberOfLines={1} style={styles.categoryText} variant="caption">
               {item.categoryName}
             </AppText>

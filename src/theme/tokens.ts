@@ -24,6 +24,7 @@ const baseColors = {
     textSecondary: '#716D78',
     border: '#E8E4E2',
     muted: '#F3F0EE',
+    chartMuted: '#D9D4D1',
     overlay: 'rgba(37, 35, 42, 0.42)',
   },
   dark: {
@@ -33,6 +34,7 @@ const baseColors = {
     textSecondary: '#B8B2BE',
     border: '#36323C',
     muted: '#2A272F',
+    chartMuted: '#4A4551',
     overlay: 'rgba(0, 0, 0, 0.58)',
   },
 } as const;

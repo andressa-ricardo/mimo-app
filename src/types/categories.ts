@@ -6,7 +6,15 @@ export type Category = {
   name: string;
 };
 
+export type PaymentMethodKind = 'credit' | 'debit' | 'pix' | 'cash' | 'other';
+
 export type PaymentMethod = {
   id: string;
   name: string;
+  kind: PaymentMethodKind;
+  institution: string | null;
+  /** Credit card due day (1–31). */
+  dueDay: number | null;
 };
+
+export type PaymentMethodDetails = Pick<PaymentMethod, 'kind' | 'institution' | 'dueDay'>;

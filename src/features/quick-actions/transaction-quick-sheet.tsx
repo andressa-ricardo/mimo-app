@@ -18,6 +18,7 @@ import { TextField } from '@/components/forms/text-field';
 import { ToggleField, ToggleGroup } from '@/components/forms/toggle-field';
 import { insertTransaction } from '@/database/repositories/finance-repository';
 import { MAX_INSTALLMENTS } from '@/features/finance/finance-calculations';
+import { findPreset, PRESET_VALUE_PREFIX, unusedPresets } from '@/features/finance/payment-presets';
 import { FormError, formStyles } from '@/features/quick-actions/form-parts';
 import {
   describeError,
@@ -84,6 +85,21 @@ function TransactionForm({ onSaved }: { onSaved: QuickSheetProps['onSaved'] }) {
       planned ||
       !isExpense,
   );
+
+  // Picking a suggestion registers it (with type and bank) the first time.
+  const selectPaymentMethod = async (value: string | null) => {
+    const preset = value ? findPreset(value) : undefined;
+    if (!preset) {
+      setPaymentMethodId(value);
+      return;
+    }
+    try {
+      const method = await addMethod(preset.name, { kind: preset.kind, institution: preset.institution });
+      setPaymentMethodId(method.id);
+    } catch (error: unknown) {
+      setFormError(describeError(error, 'Não foi possível adicionar a forma de pagamento.'));
+    }
+  };
 
   const changeType = (next: TransactionType) => {
     setType(next);
@@ -178,14 +194,21 @@ function TransactionForm({ onSaved }: { onSaved: QuickSheetProps['onSaved'] }) {
         <View style={formStyles.row}>
           <DateField containerStyle={formStyles.half} label="Data" onChange={setDate} value={date} />
           <SelectField
-            addLabel="Adicionar forma"
-            addPlaceholder="Ex.: Cartão de crédito"
+            addLabel="Outra forma de pagamento"
+            addPlaceholder="Ex.: Crédito Sicredi"
             containerStyle={formStyles.half}
             label={isExpense ? 'Pagamento' : 'Recebimento'}
             noneLabel="Não informado"
             onAdd={async (name) => (await addMethod(name)).id}
-            onChange={setPaymentMethodId}
-            options={methods.map((method) => ({ value: method.id, label: method.name }))}
+            onChange={(value) => void selectPaymentMethod(value)}
+            options={[
+              ...methods.map((method) => ({ value: method.id, label: method.name, group: 'Suas formas' })),
+              ...unusedPresets(methods).map((preset) => ({
+                value: `${PRESET_VALUE_PREFIX}${preset.key}`,
+                label: preset.name,
+                group: 'Sugestões',
+              })),
+            ]}
             value={paymentMethodId}
           />
         </View>

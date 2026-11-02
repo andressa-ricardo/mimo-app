@@ -1,5 +1,5 @@
 import { getDatabase } from '@/database/client';
-import { getConfirmedTotal } from '@/database/repositories/finance-repository';
+import { getConfirmedTotal, listBudgets } from '@/database/repositories/finance-repository';
 import { WISHLIST_FILE_OWNER } from '@/database/repositories/wishlist-repository';
 import type { HomeSummary, HomeTask, HomeWishlistItem } from '@/features/home/home-types';
 import { storedImageUri } from '@/services/images/image-storage';
@@ -93,14 +93,16 @@ async function loadWishlist(): Promise<HomeWishlistItem[]> {
 export async function loadHomeSummary(): Promise<HomeSummary> {
   const now = new Date();
   const month = getMonthRange(now);
-  const [expenseCents, tasks, wishlist] = await Promise.all([
+  const [expenseCents, budgets, tasks, wishlist] = await Promise.all([
     getConfirmedTotal('expense', month.start, month.end),
+    listBudgets(),
     loadTasks(now),
     loadWishlist(),
   ]);
+  const budgetCents = budgets.reduce((total, budget) => total + budget.amountCents, 0);
 
   return {
-    monthlyFinance: { expenseCents, budgetCents: null },
+    monthlyFinance: { expenseCents, budgetCents: budgets.length > 0 ? budgetCents : null },
     tasks,
     plans: [],
     wishlist,

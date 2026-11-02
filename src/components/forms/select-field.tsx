@@ -1,5 +1,5 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
-import { useEffect, useRef, useState, type ComponentRef } from 'react';
+import { Fragment, useEffect, useRef, useState, type ComponentRef } from 'react';
 import {
   Keyboard,
   Modal,
@@ -19,7 +19,8 @@ import { FormField, inputStyles } from '@/components/forms/text-field';
 import { AppText } from '@/components/ui/app-text';
 import { useAppTheme } from '@/theme/theme-provider';
 
-export type SelectOption = { value: string; label: string };
+/** `group` renders a small section header before the first option of each group. */
+export type SelectOption = { value: string; label: string; group?: string };
 
 type SelectFieldProps = {
   addLabel: string;
@@ -65,7 +66,10 @@ export function SelectField({
   const [keyboardHeight, setKeyboardHeight] = useState(0);
   const open = anchor !== null;
   const selected = options.find((option) => option.value === value);
-  const rows: { value: string | null; label: string }[] = [{ value: null, label: noneLabel }, ...options];
+  const rows: { value: string | null; label: string; group?: string }[] = [
+    { value: null, label: noneLabel },
+    ...options,
+  ];
 
   const measure = () => {
     triggerRef.current?.measureInWindow((x, y, width, height) => setAnchor({ x, y, width, height }));
@@ -150,23 +154,30 @@ export function SelectField({
             { backgroundColor: colors.surface, borderColor: colors.border },
           ]}>
           <ScrollView bounces={false} keyboardShouldPersistTaps="handled">
-            {rows.map((row) => {
+            {rows.map((row, index) => {
               const isSelected = row.value === value;
+              const startsGroup = row.group !== undefined && row.group !== rows[index - 1]?.group;
               return (
-                <Pressable
-                  accessibilityRole="radio"
-                  accessibilityState={{ checked: isSelected }}
-                  key={row.value ?? 'none'}
-                  onPress={() => choose(row.value)}
-                  style={({ pressed }) => [styles.option, pressed && { backgroundColor: colors.muted }]}>
-                  <AppText
-                    color={row.value === null ? 'secondary' : 'primary'}
-                    numberOfLines={1}
-                    style={styles.flex}>
-                    {row.label}
-                  </AppText>
-                  {isSelected ? <Ionicons color={colors.accent} name="checkmark" size={16} /> : null}
-                </Pressable>
+                <Fragment key={row.value ?? 'none'}>
+                  {startsGroup ? (
+                    <AppText color="secondary" style={styles.groupLabel} variant="caption">
+                      {row.group}
+                    </AppText>
+                  ) : null}
+                  <Pressable
+                    accessibilityRole="radio"
+                    accessibilityState={{ checked: isSelected }}
+                    onPress={() => choose(row.value)}
+                    style={({ pressed }) => [styles.option, pressed && { backgroundColor: colors.muted }]}>
+                    <AppText
+                      color={row.value === null ? 'secondary' : 'primary'}
+                      numberOfLines={1}
+                      style={styles.flex}>
+                      {row.label}
+                    </AppText>
+                    {isSelected ? <Ionicons color={colors.accent} name="checkmark" size={16} /> : null}
+                  </Pressable>
+                </Fragment>
               );
             })}
             <View style={[styles.divider, { backgroundColor: colors.border }]} />
@@ -201,6 +212,11 @@ const styles = StyleSheet.create({
   },
   flex: {
     flex: 1,
+  },
+  groupLabel: {
+    paddingBottom: 2,
+    paddingHorizontal: 14,
+    paddingTop: 10,
   },
   menu: {
     borderRadius: 13,
