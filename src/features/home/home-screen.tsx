@@ -1,7 +1,7 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { Image } from 'expo-image';
 import { type Href, router } from 'expo-router';
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import {
   ActivityIndicator,
   FlatList,
@@ -13,6 +13,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { AppText } from '@/components/ui/app-text';
+import { Toast, type ToastMessage } from '@/components/ui/toast';
 import type {
   HomeGoal,
   HomeNote,
@@ -21,6 +22,9 @@ import type {
   HomeWishlistItem,
 } from '@/features/home/home-types';
 import { useHomeSummary } from '@/features/home/use-home-summary';
+import { TaskQuickSheet } from '@/features/quick-actions/task-quick-sheet';
+import { TransactionQuickSheet } from '@/features/quick-actions/transaction-quick-sheet';
+import { WishlistQuickSheet } from '@/features/quick-actions/wishlist-quick-sheet';
 import { useAppTheme } from '@/theme/theme-provider';
 import { formatCurrency, formatHomeDate, getGreeting } from '@/utils/format';
 
@@ -56,21 +60,24 @@ function EmptyState({ icon, message }: { icon: keyof typeof Ionicons.glyphMap; m
   );
 }
 
-function QuickActions() {
+type QuickActionSheet = 'task' | 'transaction' | 'wishlist';
+
+function QuickActions({ onOpen }: { onOpen: (sheet: QuickActionSheet) => void }) {
   const { colors } = useAppTheme();
-  const actions: { href: Href; label: string }[] = [
-    { label: 'Tarefa', href: '/(tabs)/tasks' },
-    { label: 'Gasto', href: '/(tabs)/finances' },
-    { label: 'Desejo', href: '/(tabs)/wishlist' },
+  const actions: { sheet: QuickActionSheet; label: string; accessibilityLabel: string }[] = [
+    { label: 'Tarefa', sheet: 'task', accessibilityLabel: 'Nova tarefa' },
+    { label: 'Gasto', sheet: 'transaction', accessibilityLabel: 'Nova transação' },
+    { label: 'Desejo', sheet: 'wishlist', accessibilityLabel: 'Novo desejo' },
   ];
 
   return (
     <View style={styles.quickActions}>
       {actions.map((action) => (
         <Pressable
+          accessibilityLabel={action.accessibilityLabel}
           accessibilityRole="button"
           key={action.label}
-          onPress={() => router.push(action.href)}
+          onPress={() => onOpen(action.sheet)}
           style={({ pressed }) => [
             styles.quickAction,
             { backgroundColor: colors.surface, borderColor: colors.border },
@@ -338,7 +345,16 @@ export function HomeScreen() {
   const { colors, profile } = useAppTheme();
   const summary = useHomeSummary();
   const [now, setNow] = useState(() => new Date());
+  const [activeSheet, setActiveSheet] = useState<QuickActionSheet | null>(null);
+  const [toast, setToast] = useState<ToastMessage | null>(null);
   const firstLetter = profile.preferredName.charAt(0).toUpperCase() || 'M';
+
+  const closeSheet = useCallback(() => setActiveSheet(null), []);
+  const hideToast = useCallback(() => setToast(null), []);
+  const handleSaved = useCallback((text: string) => {
+    setActiveSheet(null);
+    setToast({ id: Date.now(), text });
+  }, []);
 
   useEffect(() => {
     const timer = setInterval(() => setNow(new Date()), 60_000);
@@ -394,7 +410,7 @@ export function HomeScreen() {
           </Pressable>
         </View>
 
-        <QuickActions />
+        <QuickActions onOpen={setActiveSheet} />
         <FinanceCard {...data.monthlyFinance} />
         <SecondaryShortcuts />
 
@@ -423,6 +439,11 @@ export function HomeScreen() {
           <NoteGrid notes={data.notes} />
         </View>
       </ScrollView>
+
+      <Toast message={toast} onHide={hideToast} />
+      <TaskQuickSheet onClose={closeSheet} onSaved={handleSaved} visible={activeSheet === 'task'} />
+      <TransactionQuickSheet onClose={closeSheet} onSaved={handleSaved} visible={activeSheet === 'transaction'} />
+      <WishlistQuickSheet onClose={closeSheet} onSaved={handleSaved} visible={activeSheet === 'wishlist'} />
     </SafeAreaView>
   );
 }

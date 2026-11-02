@@ -1,8 +1,8 @@
+import { formatCentsAmount } from '@/utils/money';
+
 export function formatCurrency(cents: number): string {
-  return new Intl.NumberFormat('pt-BR', {
-    style: 'currency',
-    currency: 'BRL',
-  }).format(cents / 100);
+  const formatted = `R$ ${formatCentsAmount(Math.abs(cents))}`;
+  return cents < 0 ? `-${formatted}` : formatted;
 }
 
 export function formatHomeDate(date: Date): string {

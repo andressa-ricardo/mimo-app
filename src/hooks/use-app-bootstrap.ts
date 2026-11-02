@@ -5,6 +5,7 @@ import {
   getAppearancePreferences,
   getProfilePreferences,
 } from '@/database/repositories/preferences-repository';
+import { configureNotifications } from '@/services/notifications/task-reminders';
 import { initializeAppDirectories } from '@/services/storage/app-directories';
 import {
   defaultAppearancePreferences,
@@ -37,6 +38,7 @@ export function useAppBootstrap(): BootstrapState {
       try {
         await initializeDatabase();
         initializeAppDirectories();
+        configureNotifications();
         const [appearance, profile] = await Promise.all([
           getAppearancePreferences(),
           getProfilePreferences(),
