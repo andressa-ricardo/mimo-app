@@ -15,9 +15,14 @@ const shortMonth = new Intl.DateTimeFormat('pt-BR', { month: 'short' });
 const longMonth = new Intl.DateTimeFormat('pt-BR', { month: 'long', year: 'numeric' });
 const wholeReais = new Intl.NumberFormat('pt-BR', { maximumFractionDigits: 0 });
 
-/** "R$ 3.964" — whole reais (integer math) so cap labels fit the column. */
+/** Compact cap label so six columns fit: "R$ 855", "R$ 3,9 mil", "R$ 12 mil" (integer math). */
 function formatCapLabel(cents: number): string {
-  return `R$ ${wholeReais.format((cents - (cents % 100)) / 100)}`;
+  const reais = (cents - (cents % 100)) / 100;
+  if (reais < 1000) return `R$ ${wholeReais.format(reais)}`;
+  const tenths = Math.round(reais / 100); // thousands, one decimal
+  if (tenths >= 100) return `R$ ${wholeReais.format(Math.round(tenths / 10))} mil`;
+  const whole = (tenths - (tenths % 10)) / 10;
+  return tenths % 10 === 0 ? `R$ ${whole} mil` : `R$ ${whole},${tenths % 10} mil`;
 }
 
 type SpendingTrendChartProps = {
@@ -28,8 +33,8 @@ type SpendingTrendChartProps = {
 
 /**
  * Single-series column chart of confirmed expenses (emphasis form): the viewed
- * month in the accent, the others in a recessive gray. Only the highlighted
- * column carries a value label; tapping a column switches to that month.
+ * month in the accent, the others in a recessive gray. Every column carries a
+ * compact value (the viewed month in bold); tapping a column switches to that month.
  */
 export function SpendingTrendChart({ onSelect, points, selectedKey }: SpendingTrendChartProps) {
   const { colors } = useAppTheme();
@@ -62,8 +67,12 @@ export function SpendingTrendChart({ onSelect, points, selectedKey }: SpendingTr
               key={point.key}
               onPress={() => onSelect(point)}
               style={styles.slot}>
-              {selected && hasData ? (
-                <AppText numberOfLines={1} style={styles.capLabel} variant="caption">
+              {point.expenseCents > 0 ? (
+                <AppText
+                  color={selected ? 'primary' : 'secondary'}
+                  numberOfLines={1}
+                  style={[styles.capLabel, selected && styles.capLabelSelected]}
+                  variant="caption">
                   {formatCapLabel(point.expenseCents)}
                 </AppText>
               ) : null}
@@ -123,10 +132,13 @@ const styles = StyleSheet.create({
     height: StyleSheet.hairlineWidth,
   },
   capLabel: {
-    fontFamily: 'Inter_600SemiBold',
+    fontSize: 10,
     marginBottom: 4,
-    minWidth: 80,
+    minWidth: 64,
     textAlign: 'center',
+  },
+  capLabelSelected: {
+    fontFamily: 'Inter_600SemiBold',
   },
   card: {
     borderRadius: 18,

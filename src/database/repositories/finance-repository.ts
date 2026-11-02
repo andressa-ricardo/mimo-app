@@ -223,7 +223,8 @@ type SeriesRow = {
 /**
  * Every amount that falls inside [rangeStart, rangeEnd]: stored entries plus
  * projected occurrences of recurring series (bounded to the range), so a
- * recurring transaction never needs unlimited future rows.
+ * recurring transaction never needs unlimited future rows. Projected
+ * occurrences are always "planned": confirming one stores it as confirmed.
  */
 export async function getEntriesInRange(rangeStart: DateKey, rangeEnd: DateKey): Promise<MonthEntry[]> {
   const database = await getDatabase();
@@ -291,7 +292,9 @@ export async function getEntriesInRange(rangeStart: DateKey, rangeEnd: DateKey):
         description: row.description,
         amountCents: row.amount_cents,
         dueDate: occurrence.dueDate,
-        status: row.status,
+        // A new month's occurrence is pending until the user confirms it was
+        // paid/received; only then is it stored and counted in the totals.
+        status: 'planned',
         categoryId: row.category_id,
         categoryName: row.category_name,
         paymentMethodId: row.payment_method_id,
