@@ -271,4 +271,40 @@ export const migrations: readonly Migration[] = [
       }
     },
   },
+  {
+    version: 6,
+    name: 'create_goal_planning_blocks',
+    migrate: async (database) => {
+      // A goal is split into blocks (e.g. "Hotel"), each with an optional
+      // reserved amount and a list of ideas (options, links, prices).
+      await database.execAsync(`
+        CREATE TABLE goal_sections (
+          id TEXT PRIMARY KEY NOT NULL,
+          goal_id TEXT NOT NULL REFERENCES savings_goals(id) ON DELETE CASCADE,
+          title TEXT NOT NULL CHECK (length(trim(title)) BETWEEN 1 AND 60),
+          planned_amount_cents INTEGER CHECK (planned_amount_cents IS NULL OR planned_amount_cents > 0),
+          sort_order INTEGER NOT NULL DEFAULT 0,
+          created_at INTEGER NOT NULL,
+          updated_at INTEGER NOT NULL
+        );
+
+        CREATE INDEX goal_sections_goal_idx ON goal_sections(goal_id, sort_order);
+
+        CREATE TABLE goal_section_items (
+          id TEXT PRIMARY KEY NOT NULL,
+          section_id TEXT NOT NULL REFERENCES goal_sections(id) ON DELETE CASCADE,
+          title TEXT NOT NULL CHECK (length(trim(title)) > 0),
+          url TEXT,
+          price_cents INTEGER CHECK (price_cents IS NULL OR price_cents >= 0),
+          note TEXT,
+          done INTEGER NOT NULL DEFAULT 0 CHECK (done IN (0, 1)),
+          sort_order INTEGER NOT NULL DEFAULT 0,
+          created_at INTEGER NOT NULL,
+          updated_at INTEGER NOT NULL
+        );
+
+        CREATE INDEX goal_section_items_section_idx ON goal_section_items(section_id, sort_order);
+      `);
+    },
+  },
 ];

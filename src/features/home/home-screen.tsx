@@ -17,7 +17,6 @@ import { Toast, type ToastMessage } from '@/components/ui/toast';
 import { getTask } from '@/database/repositories/tasks-repository';
 import type {
   HomeGoal,
-  HomePlan,
   HomeTask,
   HomeWishlistItem,
 } from '@/features/home/home-types';
@@ -231,44 +230,6 @@ function TaskList({ entries, onEdit, onToggle }: TaskListProps) {
   );
 }
 
-function PlanList({ plans }: { plans: HomePlan[] }) {
-  const { colors } = useAppTheme();
-  if (plans.length === 0) {
-    return <EmptyState icon="map-outline" message="Nenhum plano ativo no momento." />;
-  }
-
-  return (
-    <View style={styles.cardGap}>
-      {plans.map((plan) => (
-        <View
-          key={plan.id}
-          style={[styles.planCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-          {plan.thumbnailUri ? (
-            <Image cachePolicy="disk" contentFit="cover" source={plan.thumbnailUri} style={styles.planImage} />
-          ) : (
-            <View style={[styles.planImage, styles.imageFallback, { backgroundColor: colors.accentSoft }]}>
-              <Ionicons color={colors.accent} name="map-outline" size={21} />
-            </View>
-          )}
-          <View style={styles.planCopy}>
-            <AppText numberOfLines={1}>{plan.title}</AppText>
-            <AppText color="secondary" numberOfLines={1} variant="caption">
-              {[plan.startAt, plan.location].filter(Boolean).join(' · ') || 'Detalhes a definir'}
-            </AppText>
-            <AppText color="accent" numberOfLines={1} variant="caption">
-              {formatCurrency(plan.actualCostCents)}
-              {plan.estimatedCostCents !== null
-                ? ` de ${formatCurrency(plan.estimatedCostCents)}`
-                : ''}
-            </AppText>
-          </View>
-          <Ionicons color={colors.textSecondary} name="chevron-forward" size={17} />
-        </View>
-      ))}
-    </View>
-  );
-}
-
 function WishlistList({ items }: { items: HomeWishlistItem[] }) {
   const { colors } = useAppTheme();
   if (items.length === 0) {
@@ -333,7 +294,9 @@ function GoalList({ goals }: { goals: HomeGoal[] }) {
             accessibilityLabel={`${goal.title}, ${progress.percent}%`}
             accessibilityRole="button"
             key={goal.id}
-            onPress={() => router.push({ pathname: '/goals/[id]', params: { id: goal.id } })}
+            onPress={() =>
+              router.push({ pathname: '/goals/[id]', params: { id: goal.id } }, { withAnchor: true })
+            }
             style={({ pressed }) => [styles.goalRow, pressed && styles.pressed]}>
             <View style={styles.goalHeading}>
               <AppText numberOfLines={1} style={styles.goalTitle} variant="label">
@@ -505,10 +468,6 @@ export function HomeScreen() {
           />
         </View>
 
-        <View style={styles.section}>
-          <SectionHeader href="/(tabs)/plans" title="Planos ativos" />
-          <PlanList plans={data.plans} />
-        </View>
 
         <View style={styles.section}>
           <SectionHeader href="/(tabs)/wishlist" title="Desejos em destaque" />
@@ -653,23 +612,6 @@ const styles = StyleSheet.create({
   },
   onAccentMuted: {
     opacity: 0.82,
-  },
-  planCard: {
-    alignItems: 'center',
-    borderRadius: 18,
-    borderWidth: 1,
-    flexDirection: 'row',
-    padding: 10,
-  },
-  planCopy: {
-    flex: 1,
-    gap: 2,
-    marginHorizontal: 10,
-  },
-  planImage: {
-    borderRadius: 14,
-    height: 58,
-    width: 58,
   },
   pressed: {
     opacity: 0.68,

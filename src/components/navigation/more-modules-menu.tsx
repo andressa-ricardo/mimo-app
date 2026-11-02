@@ -8,12 +8,11 @@ import { AppText } from '@/components/ui/app-text';
 import { useAppTheme } from '@/theme/theme-provider';
 
 const modules: { href: Href; icon: keyof typeof Ionicons.glyphMap; label: string }[] = [
-  { label: 'Metas', icon: 'disc-outline', href: '/goals' },
   { label: 'Calendário', icon: 'calendar-outline', href: '/calendar' },
   { label: 'Configurações', icon: 'settings-outline', href: '/settings' },
 ];
 
-/** "⋯" header button that opens the secondary modules (Metas, Calendário, Configurações). */
+/** "⋯" header button that opens the secondary modules (Calendário, Configurações). */
 export function MoreModulesMenu() {
   const { colors } = useAppTheme();
   const insets = useSafeAreaInsets();

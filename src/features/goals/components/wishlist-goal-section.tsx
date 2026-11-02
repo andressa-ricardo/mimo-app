@@ -47,7 +47,7 @@ export function WishlistGoalSection({
           <GoalCard
             goal={goal}
             key={goal.id}
-            onPress={() => router.push({ pathname: '/goals/[id]', params: { id: goal.id } })}
+            onPress={() => router.push({ pathname: '/goals/[id]', params: { id: goal.id } }, { withAnchor: true })}
           />
         ))
       ) : (

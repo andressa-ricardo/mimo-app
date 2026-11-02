@@ -40,3 +40,24 @@ export type GoalMovementInput = {
   date: DateKey;
   note: string | null;
 };
+
+export type GoalSectionItem = {
+  id: string;
+  sectionId: string;
+  title: string;
+  url: string | null;
+  priceCents: number | null;
+  note: string | null;
+  done: boolean;
+};
+
+/** A planning block of a goal (e.g. "Hotel"), with an optional reserved amount and its ideas. */
+export type GoalSection = {
+  id: string;
+  goalId: string;
+  title: string;
+  plannedAmountCents: number | null;
+  items: GoalSectionItem[];
+};
+
+export type GoalSectionItemInput = Omit<GoalSectionItem, 'id' | 'sectionId' | 'done'>;

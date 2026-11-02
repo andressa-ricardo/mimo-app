@@ -10,6 +10,7 @@ import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { Toast, type ToastMessage } from '@/components/ui/toast';
 import { deleteGoal, setGoalArchived } from '@/database/repositories/goals-repository';
 import { describeRemaining, GoalProgressBar, GoalStatusPill } from '@/features/goals/components/goal-card';
+import { GoalPlanSection } from '@/features/goals/components/goal-plan-section';
 import { GoalSheet } from '@/features/goals/components/goal-sheet';
 import { MovementSheet, type MovementSheetMode } from '@/features/goals/components/movement-sheet';
 import { goalProgress } from '@/features/goals/goal-math';
@@ -318,6 +319,8 @@ export function GoalDetailScreen() {
             <AppText>{goal.description}</AppText>
           </View>
         ) : null}
+
+        <GoalPlanSection goal={goal} onFeedback={showToast} sections={state.data?.sections ?? []} />
 
         <View style={styles.section}>
           <AppText accessibilityRole="header" variant="section">

@@ -35,15 +35,7 @@ import {
 import { useAppTheme } from '@/theme/theme-provider';
 import type { Priority } from '@/types/tasks';
 import type { WishlistImageChange, WishlistItem } from '@/types/wishlist';
-
-const URL_PATTERN = /^https?:\/\/[^\s/.]+\.[^\s]+$/i;
-
-function normalizeUrl(text: string): { value: string | null; valid: boolean } {
-  const trimmed = text.trim();
-  if (!trimmed) return { value: null, valid: true };
-  const withScheme = /^[a-z][a-z\d+.-]*:\/\//i.test(trimmed) ? trimmed : `https://${trimmed}`;
-  return { value: withScheme, valid: URL_PATTERN.test(withScheme) };
-}
+import { normalizeUrl } from '@/utils/url';
 
 type WishlistFormProps = {
   item: WishlistItem | null;

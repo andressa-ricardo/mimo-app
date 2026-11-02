@@ -11,16 +11,6 @@ export type HomeTask = {
   isOverdue: boolean;
 };
 
-export type HomePlan = {
-  id: string;
-  title: string;
-  startAt: string | null;
-  location: string | null;
-  estimatedCostCents: number | null;
-  actualCostCents: number;
-  thumbnailUri: string | null;
-};
-
 export type HomeWishlistItem = {
   id: string;
   name: string;
@@ -39,7 +29,6 @@ export type HomeGoal = {
 export type HomeSummary = {
   monthlyFinance: HomeMonthlyFinance;
   tasks: HomeTask[];
-  plans: HomePlan[];
   wishlist: HomeWishlistItem[];
   goals: HomeGoal[];
 };

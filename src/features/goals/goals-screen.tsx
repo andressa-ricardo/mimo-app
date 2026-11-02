@@ -59,15 +59,6 @@ export function GoalsScreen() {
   return (
     <SafeAreaView edges={['top']} style={[styles.screen, { backgroundColor: colors.background }]}>
       <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
-        <Pressable
-          accessibilityLabel="Voltar"
-          accessibilityRole="button"
-          hitSlop={10}
-          onPress={() => router.back()}
-          style={({ pressed }) => [styles.back, pressed && styles.pressed]}>
-          <Ionicons color={colors.text} name="chevron-back" size={22} />
-        </Pressable>
-
         <View style={styles.header}>
           <View style={styles.flex}>
             <AppText variant="title">Minhas metas</AppText>
@@ -153,13 +144,6 @@ export function GoalsScreen() {
 }
 
 const styles = StyleSheet.create({
-  back: {
-    alignItems: 'center',
-    height: 40,
-    justifyContent: 'center',
-    marginLeft: -8,
-    width: 40,
-  },
   center: {
     textAlign: 'center',
   },
@@ -172,7 +156,7 @@ const styles = StyleSheet.create({
     maxWidth: 560,
     paddingBottom: 32,
     paddingHorizontal: 16,
-    paddingTop: 4,
+    paddingTop: 8,
     width: '100%',
   },
   empty: {

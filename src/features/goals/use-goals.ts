@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 
+import { listGoalSections } from '@/database/repositories/goal-plan-repository';
 import {
   getGoal,
   listGoals,
@@ -7,7 +8,7 @@ import {
   listMovements,
 } from '@/database/repositories/goals-repository';
 import { subscribeToDataChanges, type DataChangeScope } from '@/services/events/data-events';
-import type { Goal, GoalMovement } from '@/types/goals';
+import type { Goal, GoalMovement, GoalSection } from '@/types/goals';
 
 type LoadState<T> =
   | { status: 'loading'; data: null }
@@ -56,10 +57,12 @@ export function useGoals(): LoadState<Goal[]> {
   return useLiveQuery(listGoals, GOAL_SCOPES);
 }
 
-export function useGoalDetail(id: string): LoadState<{ goal: Goal | null; movements: GoalMovement[] }> {
+export type GoalDetailData = { goal: Goal | null; movements: GoalMovement[]; sections: GoalSection[] };
+
+export function useGoalDetail(id: string): LoadState<GoalDetailData> {
   const load = useCallback(async () => {
-    const [goal, movements] = await Promise.all([getGoal(id), listMovements(id)]);
-    return { goal, movements };
+    const [goal, movements, sections] = await Promise.all([getGoal(id), listMovements(id), listGoalSections(id)]);
+    return { goal, movements, sections };
   }, [id]);
   return useLiveQuery(load, GOAL_SCOPES);
 }

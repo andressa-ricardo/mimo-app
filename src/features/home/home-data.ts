@@ -122,7 +122,6 @@ export async function loadHomeSummary(): Promise<HomeSummary> {
   return {
     monthlyFinance: { expenseCents, budgetCents: budgets.length > 0 ? budgetCents : null },
     tasks,
-    plans: [],
     wishlist,
     goals,
   };
