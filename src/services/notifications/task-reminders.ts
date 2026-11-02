@@ -40,16 +40,34 @@ function isGranted(status: NotificationPermissionsStatus): boolean {
   );
 }
 
+let channelsAvailable = Platform.OS === "android";
+
+/**
+ * Creates the Android channels. Expo Go on Android rejects this call (its
+ * scoped channel manager fails to read the channel back), so a failure is not
+ * fatal: reminders then use the default channel instead.
+ */
 async function ensureChannels(): Promise<void> {
   if (Platform.OS !== "android") return;
-  await setNotificationChannelAsync(TASK_CHANNEL_ID, {
-    name: "Lembretes de tarefas",
-    importance: AndroidImportance.HIGH,
-  });
-  await setNotificationChannelAsync(BILL_CHANNEL_ID, {
-    name: "Vencimentos de contas",
-    importance: AndroidImportance.DEFAULT,
-  });
+  try {
+    await setNotificationChannelAsync(TASK_CHANNEL_ID, {
+      name: "Lembretes de tarefas",
+      importance: AndroidImportance.HIGH,
+    });
+    await setNotificationChannelAsync(BILL_CHANNEL_ID, {
+      name: "Vencimentos de contas",
+      importance: AndroidImportance.DEFAULT,
+    });
+    channelsAvailable = true;
+  } catch (error: unknown) {
+    channelsAvailable = false;
+    console.warn("Canais de notificação indisponíveis; usando o canal padrão.", error);
+  }
+}
+
+/** The channel to schedule on, or undefined to fall back to the default one. */
+export function channelFor(channelId: string): string | undefined {
+  return channelsAvailable ? channelId : undefined;
 }
 
 /** Creates the Android channels (required before the prompt on Android 13+) and asks once. */
@@ -96,7 +114,7 @@ export async function scheduleTaskReminder(
     trigger: {
       type: SchedulableTriggerInputTypes.DATE,
       date,
-      channelId: TASK_CHANNEL_ID,
+      channelId: channelFor(TASK_CHANNEL_ID),
     },
   });
 }

@@ -7,6 +7,7 @@ import {
   BILL_CHANNEL_ID,
   BILL_REMINDER_KIND,
   cancelScheduledByKind,
+  channelFor,
   hasNotificationPermission,
 } from '@/services/notifications/task-reminders';
 import { addMonthsToDateKey, combineDateAndTime, daysInMonth, toDateKey, type DateKey } from '@/utils/date';
@@ -76,7 +77,7 @@ export async function syncBillReminders(): Promise<void> {
     try {
       await scheduleNotificationAsync({
         content: { title: reminder.title, body: reminder.body, data: { kind: BILL_REMINDER_KIND } },
-        trigger: { type: SchedulableTriggerInputTypes.DATE, date: reminder.date, channelId: BILL_CHANNEL_ID },
+        trigger: { type: SchedulableTriggerInputTypes.DATE, date: reminder.date, channelId: channelFor(BILL_CHANNEL_ID) },
       });
     } catch (error: unknown) {
       console.warn('Falha ao agendar lembrete de vencimento.', error);
