@@ -6,9 +6,12 @@ import {
   type AccentColor,
   type AppearancePreferences,
   type ColorSchemePreference,
+  defaultProfilePreferences,
+  type ProfilePreferences,
 } from '@/types/preferences';
 
 const APPEARANCE_KEY = 'appearance';
+const PROFILE_KEY = 'profile';
 
 function isColorScheme(value: string | null): value is ColorSchemePreference {
   return colorSchemes.some((option) => option === value);
@@ -48,4 +51,26 @@ export async function saveAppearancePreferences(
   preferences: AppearancePreferences,
 ): Promise<void> {
   await setSetting(APPEARANCE_KEY, JSON.stringify(preferences));
+}
+
+export async function getProfilePreferences(): Promise<ProfilePreferences> {
+  const storedValue = await getSetting(PROFILE_KEY);
+  if (!storedValue) return defaultProfilePreferences;
+
+  try {
+    const parsed: unknown = JSON.parse(storedValue);
+    if (typeof parsed !== 'object' || parsed === null) return defaultProfilePreferences;
+
+    const { preferredName, onboardingCompleted } = parsed as Record<string, unknown>;
+    return {
+      preferredName: typeof preferredName === 'string' ? preferredName : '',
+      onboardingCompleted: onboardingCompleted === true,
+    };
+  } catch {
+    return defaultProfilePreferences;
+  }
+}
+
+export async function saveProfilePreferences(preferences: ProfilePreferences): Promise<void> {
+  await setSetting(PROFILE_KEY, JSON.stringify(preferences));
 }

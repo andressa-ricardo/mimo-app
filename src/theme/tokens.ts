@@ -23,6 +23,8 @@ const baseColors = {
     text: '#25232A',
     textSecondary: '#716D78',
     border: '#E8E4E2',
+    muted: '#F3F0EE',
+    overlay: 'rgba(37, 35, 42, 0.42)',
   },
   dark: {
     background: '#17161B',
@@ -30,6 +32,8 @@ const baseColors = {
     text: '#F7F3F8',
     textSecondary: '#B8B2BE',
     border: '#36323C',
+    muted: '#2A272F',
+    overlay: 'rgba(0, 0, 0, 0.58)',
   },
 } as const;
 
@@ -41,6 +45,7 @@ export function createThemeColors(isDark: boolean, accentColor: AccentColor) {
     ...base,
     accent: isDark ? accent.dark : accent.primary,
     accentSoft: isDark ? '#2B2633' : accent.soft,
+    onAccent: isDark ? '#201C26' : '#FFFFFF',
     ...semanticColors,
   };
 }

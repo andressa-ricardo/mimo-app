@@ -1,3 +1,8 @@
+import { Inter_400Regular } from '@expo-google-fonts/inter/400Regular';
+import { Inter_500Medium } from '@expo-google-fonts/inter/500Medium';
+import { Inter_600SemiBold } from '@expo-google-fonts/inter/600SemiBold';
+import { Inter_700Bold } from '@expo-google-fonts/inter/700Bold';
+import { useFonts } from 'expo-font';
 import { Stack } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
 import { StatusBar } from 'expo-status-bar';
@@ -19,7 +24,15 @@ function RootNavigator() {
           contentStyle: { backgroundColor: colors.background },
           headerShown: false,
         }}
-      />
+      >
+        <Stack.Screen name="index" />
+        <Stack.Screen name="onboarding" />
+        <Stack.Screen name="(tabs)" />
+        <Stack.Screen name="notes" options={{ animation: 'slide_from_right' }} />
+        <Stack.Screen name="goals" options={{ animation: 'slide_from_right' }} />
+        <Stack.Screen name="calendar" options={{ animation: 'slide_from_right' }} />
+        <Stack.Screen name="settings" options={{ animation: 'slide_from_right' }} />
+      </Stack>
       <StatusBar style={isDark ? 'light' : 'dark'} />
     </>
   );
@@ -27,12 +40,19 @@ function RootNavigator() {
 
 export default function RootLayout() {
   const bootstrap = useAppBootstrap();
+  const [fontsLoaded, fontError] = useFonts({
+    Inter_400Regular,
+    Inter_500Medium,
+    Inter_600SemiBold,
+    Inter_700Bold,
+  });
+  const isLoading = bootstrap.status === 'loading' || (!fontsLoaded && !fontError);
 
   useEffect(() => {
-    if (bootstrap.status !== 'loading') void SplashScreen.hideAsync();
-  }, [bootstrap.status]);
+    if (!isLoading) void SplashScreen.hideAsync();
+  }, [isLoading]);
 
-  if (bootstrap.status === 'loading') {
+  if (isLoading) {
     return (
       <View style={styles.loading}>
         <ActivityIndicator color="#8973AD" />
@@ -40,7 +60,7 @@ export default function RootLayout() {
     );
   }
 
-  if (bootstrap.status === 'error') {
+  if (bootstrap.status === 'error' || fontError) {
     return (
       <View style={styles.errorContainer}>
         <View style={styles.errorContent}>
@@ -52,7 +72,9 @@ export default function RootLayout() {
   }
 
   return (
-    <AppThemeProvider initialPreferences={bootstrap.preferences}>
+    <AppThemeProvider
+      initialPreferences={bootstrap.appearance}
+      initialProfile={bootstrap.profile}>
       <RootNavigator />
     </AppThemeProvider>
   );

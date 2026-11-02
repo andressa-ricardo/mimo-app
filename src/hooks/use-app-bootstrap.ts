@@ -1,22 +1,33 @@
 import { useEffect, useState } from 'react';
 
 import { initializeDatabase } from '@/database/client';
-import { getAppearancePreferences } from '@/database/repositories/preferences-repository';
+import {
+  getAppearancePreferences,
+  getProfilePreferences,
+} from '@/database/repositories/preferences-repository';
 import { initializeAppDirectories } from '@/services/storage/app-directories';
 import {
   defaultAppearancePreferences,
+  defaultProfilePreferences,
   type AppearancePreferences,
+  type ProfilePreferences,
 } from '@/types/preferences';
 
 type BootstrapState =
-  | { status: 'loading'; preferences: AppearancePreferences }
-  | { status: 'ready'; preferences: AppearancePreferences }
-  | { status: 'error'; preferences: AppearancePreferences; error: Error };
+  | { status: 'loading'; appearance: AppearancePreferences; profile: ProfilePreferences }
+  | { status: 'ready'; appearance: AppearancePreferences; profile: ProfilePreferences }
+  | {
+      status: 'error';
+      appearance: AppearancePreferences;
+      profile: ProfilePreferences;
+      error: Error;
+    };
 
 export function useAppBootstrap(): BootstrapState {
   const [state, setState] = useState<BootstrapState>({
     status: 'loading',
-    preferences: defaultAppearancePreferences,
+    appearance: defaultAppearancePreferences,
+    profile: defaultProfilePreferences,
   });
 
   useEffect(() => {
@@ -26,15 +37,19 @@ export function useAppBootstrap(): BootstrapState {
       try {
         await initializeDatabase();
         initializeAppDirectories();
-        const preferences = await getAppearancePreferences();
-        if (active) setState({ status: 'ready', preferences });
+        const [appearance, profile] = await Promise.all([
+          getAppearancePreferences(),
+          getProfilePreferences(),
+        ]);
+        if (active) setState({ status: 'ready', appearance, profile });
       } catch (error: unknown) {
         const normalizedError = error instanceof Error ? error : new Error(String(error));
         console.error('Falha ao inicializar o Mimo.', normalizedError);
         if (active) {
           setState({
             status: 'error',
-            preferences: defaultAppearancePreferences,
+            appearance: defaultAppearancePreferences,
+            profile: defaultProfilePreferences,
             error: normalizedError,
           });
         }

@@ -9,7 +9,17 @@ export type AppearancePreferences = {
   accentColor: AccentColor;
 };
 
+export type ProfilePreferences = {
+  preferredName: string;
+  onboardingCompleted: boolean;
+};
+
 export const defaultAppearancePreferences: AppearancePreferences = {
   colorScheme: 'system',
   accentColor: 'lavender',
+};
+
+export const defaultProfilePreferences: ProfilePreferences = {
+  preferredName: '',
+  onboardingCompleted: false,
 };

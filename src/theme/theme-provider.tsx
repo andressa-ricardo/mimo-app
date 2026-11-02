@@ -1,15 +1,29 @@
-import { createContext, useCallback, useContext, useMemo, useState, type ReactNode } from 'react';
+import {
+  createContext,
+  useCallback,
+  useContext,
+  useMemo,
+  useRef,
+  useState,
+  type ReactNode,
+} from 'react';
 import { useColorScheme } from 'react-native';
 
-import { saveAppearancePreferences } from '@/database/repositories/preferences-repository';
+import {
+  saveAppearancePreferences,
+  saveProfilePreferences,
+} from '@/database/repositories/preferences-repository';
 import { createThemeColors, type ThemeColors } from '@/theme/tokens';
-import type { AppearancePreferences } from '@/types/preferences';
+import type { AppearancePreferences, ProfilePreferences } from '@/types/preferences';
 
 type AppThemeContextValue = {
   colors: ThemeColors;
   isDark: boolean;
   preferences: AppearancePreferences;
-  setPreferences: (preferences: AppearancePreferences) => Promise<void>;
+  profile: ProfilePreferences;
+  updatePreferences: (preferences: Partial<AppearancePreferences>) => Promise<void>;
+  setPreferredName: (preferredName: string) => Promise<void>;
+  completeOnboarding: (preferredName: string) => Promise<void>;
 };
 
 const AppThemeContext = createContext<AppThemeContextValue | null>(null);
@@ -17,29 +31,80 @@ const AppThemeContext = createContext<AppThemeContextValue | null>(null);
 type AppThemeProviderProps = {
   children: ReactNode;
   initialPreferences: AppearancePreferences;
+  initialProfile: ProfilePreferences;
 };
 
-export function AppThemeProvider({ children, initialPreferences }: AppThemeProviderProps) {
+export function AppThemeProvider({
+  children,
+  initialPreferences,
+  initialProfile,
+}: AppThemeProviderProps) {
   const systemScheme = useColorScheme();
   const [preferences, setPreferencesState] = useState(initialPreferences);
+  const preferencesRef = useRef(initialPreferences);
+  const persistedPreferencesRef = useRef(initialPreferences);
+  const preferencesWriteQueue = useRef<Promise<void>>(Promise.resolve());
+  const [profile, setProfile] = useState(initialProfile);
   const isDark =
     preferences.colorScheme === 'system'
       ? systemScheme === 'dark'
       : preferences.colorScheme === 'dark';
 
-  const setPreferences = useCallback(async (nextPreferences: AppearancePreferences) => {
-    await saveAppearancePreferences(nextPreferences);
+  const updatePreferences = useCallback(async (change: Partial<AppearancePreferences>) => {
+    const previousPreferences = preferencesRef.current;
+    const nextPreferences = { ...previousPreferences, ...change };
+    preferencesRef.current = nextPreferences;
     setPreferencesState(nextPreferences);
+
+    const saveOperation = preferencesWriteQueue.current.then(async () => {
+      await saveAppearancePreferences(nextPreferences);
+      persistedPreferencesRef.current = nextPreferences;
+    });
+    preferencesWriteQueue.current = saveOperation.catch(() => undefined);
+
+    try {
+      await saveOperation;
+    } catch (error: unknown) {
+      if (preferencesRef.current === nextPreferences) {
+        preferencesRef.current = persistedPreferencesRef.current;
+        setPreferencesState(persistedPreferencesRef.current);
+      }
+      throw error;
+    }
   }, []);
+
+  const setPreferredName = useCallback(
+    async (preferredName: string) => {
+      const nextProfile = { ...profile, preferredName: preferredName.trim() };
+      await saveProfilePreferences(nextProfile);
+      setProfile(nextProfile);
+    },
+    [profile],
+  );
+
+  const completeOnboarding = useCallback(
+    async (preferredName: string) => {
+      const nextProfile = {
+        preferredName: preferredName.trim(),
+        onboardingCompleted: true,
+      };
+      await saveProfilePreferences(nextProfile);
+      setProfile(nextProfile);
+    },
+    [],
+  );
 
   const value = useMemo<AppThemeContextValue>(
     () => ({
       colors: createThemeColors(isDark, preferences.accentColor),
       isDark,
       preferences,
-      setPreferences,
+      profile,
+      updatePreferences,
+      setPreferredName,
+      completeOnboarding,
     }),
-    [isDark, preferences, setPreferences],
+    [completeOnboarding, isDark, preferences, profile, setPreferredName, updatePreferences],
   );
 
   return <AppThemeContext.Provider value={value}>{children}</AppThemeContext.Provider>;
